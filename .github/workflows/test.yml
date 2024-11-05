@@ -22,3 +22,8 @@ jobs:
 
     - name: Create k3d cluster
       run: k3d cluster create k3k
+    
+    - name: Verify
+      run: |
+        kubectl run --image=nginx nginx
+        kubectl get pods -A
