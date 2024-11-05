@@ -21,7 +21,7 @@ jobs:
         curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | TAG=v5.7.4 bash
 
     - name: Create k3d cluster
-      run: k3d cluster create k3k
+      run: k3d cluster create --wait k3k
     
     - name: Verify
       run: |
