@@ -19,13 +19,31 @@ jobs:
       run: |
         curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
         curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | TAG=v5.7.4 bash
+        curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
     - name: Create k3d cluster
-      run: k3d cluster create k3k
-    
-    - name: Verify
       run: |
+        k3d registry create registry.localhost --port 12345
+        k3d cluster create --registry-use k3d-registry.localhost:12345 k3k
         echo "Waiting for node to be ready"
         kubectl wait --for=condition=Ready $(kubectl get nodes -o name)
-        kubectl run --image=nginx nginx
-        kubectl get pods -A
+    
+    - name: Build
+      run: make
+    
+    - name: Local push
+      run: |
+        docker tag rancher/k3k:dev-kubelet  k3d-registry.localhost:12345/rancher/k3k:dev-kubelet
+        docker tag rancher/k3k:dev          k3d-registry.localhost:12345/rancher/k3k:dev
+        docker push k3d-registry.localhost:12345/rancher/k3k:dev-kubelet
+        docker push k3d-registry.localhost:12345/rancher/k3k:dev
+    
+    - name: Install k3k
+      run: |
+        helm upgrade --install \
+          --set image.repository=k3d-registry.localhost:12345/rancher/k3k \
+          --set image.tag=dev \
+          --set image.pullPolicy=IfNotPresent \
+          --set sharedAgent.image.repository=k3d-registry.localhost:12345/rancher/k3k \
+          --set sharedAgent.image.tag=dev-kubelet \
+          k3k ./charts/k3k/
