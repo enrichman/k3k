@@ -44,10 +44,10 @@ jobs:
     - name: Build
       run: |
         export CGO_ENABLED=0
-        go build -v -o bin/k3k
-        go build -v -o bin/k3k-kubelet ./k3k-kubelet
-        go build -v -o bin/k3kcli ./cli
-        sudo mv bin/k3kcli /usr/local/bin/k3kcli
+        go build -o bin/k3k
+        go build -o bin/k3k-kubelet ./k3k-kubelet
+        go build -o bin/k3kcli ./cli
+        sudo cp bin/k3kcli /usr/local/bin/k3kcli
 
     - name: Build and push images
       run: |
