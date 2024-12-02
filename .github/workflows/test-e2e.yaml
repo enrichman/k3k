@@ -68,7 +68,7 @@ jobs:
 
     - name: K3k
       run: |
-        k3kcli cluster create --name sample
+        k3kcli cluster create --name sample --kube-config $HOME/.kube/config
 
     - name: Run tests
       run: |
