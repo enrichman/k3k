@@ -68,7 +68,7 @@ jobs:
 
     - name: K3k
       run: |
-        k3kcli create cluster --name sample
+        k3kcli cluster create --name sample
 
     - name: Run tests
       run: |
