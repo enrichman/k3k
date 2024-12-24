@@ -66,49 +66,92 @@ func Add(ctx context.Context, mgr manager.Manager, sharedAgentImage string, logg
 }
 
 func (c *ClusterReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
-	var (
-		cluster v1alpha1.Cluster
-		podList v1.PodList
-	)
 	log := c.logger.With("Cluster", req.NamespacedName)
+
+	var cluster v1alpha1.Cluster
 	if err := c.Client.Get(ctx, req.NamespacedName, &cluster); err != nil {
 		return reconcile.Result{}, ctrlruntimeclient.IgnoreNotFound(err)
 	}
+
 	if cluster.DeletionTimestamp.IsZero() {
-		if !controllerutil.ContainsFinalizer(&cluster, clusterFinalizerName) {
-			controllerutil.AddFinalizer(&cluster, clusterFinalizerName)
+		if updated := controllerutil.AddFinalizer(&cluster, clusterFinalizerName); updated {
 			if err := c.Client.Update(ctx, &cluster); err != nil {
-				return reconcile.Result{}, err
+				log.Info("requeue cluster")
+				return reconcile.Result{Requeue: true}, err
 			}
 		}
-		log.Info("enqueue cluster")
+
+		log.Info("reconciling cluster")
 		return reconcile.Result{}, c.createCluster(ctx, &cluster, log)
 	}
 
 	// remove finalizer from the server pods and update them.
+	log.Info("deleting server pods")
+
 	matchingLabels := ctrlruntimeclient.MatchingLabels(map[string]string{"role": "server"})
 	listOpts := &ctrlruntimeclient.ListOptions{Namespace: cluster.Namespace}
 	matchingLabels.ApplyToList(listOpts)
+
+	var podList v1.PodList
 	if err := c.Client.List(ctx, &podList, listOpts); err != nil {
 		return reconcile.Result{}, ctrlruntimeclient.IgnoreNotFound(err)
 	}
 	for _, pod := range podList.Items {
-		if controllerutil.ContainsFinalizer(&pod, etcdPodFinalizerName) {
-			controllerutil.RemoveFinalizer(&pod, etcdPodFinalizerName)
+		if controllerutil.RemoveFinalizer(&pod, etcdPodFinalizerName) {
 			if err := c.Client.Update(ctx, &pod); err != nil {
 				return reconcile.Result{}, err
 			}
 		}
 	}
-	if controllerutil.ContainsFinalizer(&cluster, clusterFinalizerName) {
-		// remove finalizer from the cluster and update it.
-		controllerutil.RemoveFinalizer(&cluster, clusterFinalizerName)
-		if err := c.Client.Update(ctx, &cluster); err != nil {
-			return reconcile.Result{}, err
-		}
+
+	// clear pods, configmaps, secrets
+	matchingLabels = ctrlruntimeclient.MatchingLabels(map[string]string{"k3k.io/clusterName": cluster.Name})
+	deleteAllOpts := &ctrlruntimeclient.DeleteAllOfOptions{
+		ListOptions: ctrlruntimeclient.ListOptions{Namespace: cluster.Namespace},
 	}
+	matchingLabels.ApplyToDeleteAllOf(deleteAllOpts)
+
+	log.Info("deleting pods")
+	if err := c.Client.DeleteAllOf(ctx, &v1.Pod{}, deleteAllOpts); err != nil {
+		return reconcile.Result{}, ctrlruntimeclient.IgnoreNotFound(err)
+	}
+
+	log.Info("deleting configmaps")
+	if err := c.Client.DeleteAllOf(ctx, &v1.ConfigMap{}, deleteAllOpts); err != nil {
+		return reconcile.Result{}, ctrlruntimeclient.IgnoreNotFound(err)
+	}
+
+	log.Info("deleting secrets")
+	if err := c.Client.DeleteAllOf(ctx, &v1.Secret{}, deleteAllOpts); err != nil {
+		return reconcile.Result{}, ctrlruntimeclient.IgnoreNotFound(err)
+	}
+
+	// clear pods, configmaps, secrets
+	matchingLabels = ctrlruntimeclient.MatchingLabels(map[string]string{"cluster": cluster.Name})
+	deleteAllOpts = &ctrlruntimeclient.DeleteAllOfOptions{
+		ListOptions: ctrlruntimeclient.ListOptions{Namespace: cluster.Namespace},
+	}
+	matchingLabels.ApplyToDeleteAllOf(deleteAllOpts)
+
+	log.Info("deleting pods")
+	if err := c.Client.DeleteAllOf(ctx, &v1.Pod{}, deleteAllOpts); err != nil {
+		return reconcile.Result{}, ctrlruntimeclient.IgnoreNotFound(err)
+	}
+
+	log.Info("deleting configmaps")
+	if err := c.Client.DeleteAllOf(ctx, &v1.ConfigMap{}, deleteAllOpts); err != nil {
+		return reconcile.Result{}, ctrlruntimeclient.IgnoreNotFound(err)
+	}
+
+	log.Info("deleting secrets")
+	if err := c.Client.DeleteAllOf(ctx, &v1.Secret{}, deleteAllOpts); err != nil {
+		return reconcile.Result{}, ctrlruntimeclient.IgnoreNotFound(err)
+	}
+
+	// remove finalizer from the cluster and update it.
 	log.Info("deleting cluster")
-	return reconcile.Result{}, nil
+	controllerutil.RemoveFinalizer(&cluster, clusterFinalizerName)
+	return reconcile.Result{}, c.Client.Update(ctx, &cluster)
 }
 
 func (c *ClusterReconciler) createCluster(ctx context.Context, cluster *v1alpha1.Cluster, log *zap.SugaredLogger) error {
@@ -116,6 +159,7 @@ func (c *ClusterReconciler) createCluster(ctx context.Context, cluster *v1alpha1
 		log.Errorw("invalid change", zap.Error(err))
 		return nil
 	}
+
 	token, err := c.token(ctx, cluster)
 	if err != nil {
 		return err
@@ -130,9 +174,6 @@ func (c *ClusterReconciler) createCluster(ctx context.Context, cluster *v1alpha1
 			cluster.Status.Persistence.StorageRequestSize = defaultStoragePersistentSize
 		}
 	}
-	if err := c.Client.Update(ctx, cluster); err != nil {
-		return err
-	}
 
 	cluster.Status.ClusterCIDR = cluster.Spec.ClusterCIDR
 	if cluster.Status.ClusterCIDR == "" {
@@ -142,6 +183,10 @@ func (c *ClusterReconciler) createCluster(ctx context.Context, cluster *v1alpha1
 	cluster.Status.ServiceCIDR = cluster.Spec.ServiceCIDR
 	if cluster.Status.ServiceCIDR == "" {
 		cluster.Status.ServiceCIDR = defaultClusterServiceCIDR
+	}
+
+	if err := c.Client.Status().Update(ctx, cluster); err != nil {
+		return err
 	}
 
 	log.Info("creating cluster service")
