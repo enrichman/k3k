@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/rancher/k3k/k3k-kubelet/translate"
 	"github.com/rancher/k3k/pkg/apis/k3k.io/v1alpha1"
 	"github.com/rancher/k3k/pkg/controller/cluster/agent"
 	"github.com/rancher/k3k/pkg/controller/cluster/server"
@@ -66,14 +67,13 @@ func Add(ctx context.Context, mgr manager.Manager, sharedAgentImage string, logg
 }
 
 func (c *ClusterReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
-	var (
-		cluster v1alpha1.Cluster
-		podList v1.PodList
-	)
 	log := c.logger.With("Cluster", req.NamespacedName)
+
+	var cluster v1alpha1.Cluster
 	if err := c.Client.Get(ctx, req.NamespacedName, &cluster); err != nil {
 		return reconcile.Result{}, ctrlruntimeclient.IgnoreNotFound(err)
 	}
+
 	if cluster.DeletionTimestamp.IsZero() {
 		if !controllerutil.ContainsFinalizer(&cluster, clusterFinalizerName) {
 			controllerutil.AddFinalizer(&cluster, clusterFinalizerName)
@@ -85,30 +85,41 @@ func (c *ClusterReconciler) Reconcile(ctx context.Context, req reconcile.Request
 		return reconcile.Result{}, c.createCluster(ctx, &cluster, log)
 	}
 
-	// remove finalizer from the server pods and update them.
-	matchingLabels := ctrlruntimeclient.MatchingLabels(map[string]string{"role": "server"})
-	listOpts := &ctrlruntimeclient.ListOptions{Namespace: cluster.Namespace}
-	matchingLabels.ApplyToList(listOpts)
-	if err := c.Client.List(ctx, &podList, listOpts); err != nil {
-		return reconcile.Result{}, ctrlruntimeclient.IgnoreNotFound(err)
+	// scheduled cluster deletion
+
+	// remove resources scheduled from the virtual kubelet
+	deleteOpts := []ctrlruntimeclient.DeleteAllOfOption{
+		ctrlruntimeclient.InNamespace(cluster.Namespace),
+		ctrlruntimeclient.MatchingLabels{translate.ClusterNameLabel: cluster.Name},
 	}
-	for _, pod := range podList.Items {
-		if controllerutil.ContainsFinalizer(&pod, etcdPodFinalizerName) {
-			controllerutil.RemoveFinalizer(&pod, etcdPodFinalizerName)
-			if err := c.Client.Update(ctx, &pod); err != nil {
-				return reconcile.Result{}, err
-			}
-		}
-	}
-	if controllerutil.ContainsFinalizer(&cluster, clusterFinalizerName) {
-		// remove finalizer from the cluster and update it.
-		controllerutil.RemoveFinalizer(&cluster, clusterFinalizerName)
-		if err := c.Client.Update(ctx, &cluster); err != nil {
+
+	if err := c.Client.DeleteAllOf(ctx, &v1.Pod{}, deleteOpts...); err != nil {
+		if !apierrors.IsNotFound(err) {
 			return reconcile.Result{}, err
 		}
 	}
+
+	listOpts := []ctrlruntimeclient.ListOption{
+		ctrlruntimeclient.InNamespace(cluster.Namespace),
+		ctrlruntimeclient.MatchingLabels{translate.ClusterNameLabel: cluster.Name},
+	}
+
+	var podList v1.PodList
+	if err := c.Client.List(ctx, &podList, listOpts...); err != nil {
+		if !apierrors.IsNotFound(err) {
+			return reconcile.Result{}, err
+		}
+	}
+
+	if len(podList.Items) > 0 {
+		log.Info("still some pods present, requeue")
+		return reconcile.Result{Requeue: true}, nil
+	}
+
+	// remove finalizer from the cluster and update it.
 	log.Info("deleting cluster")
-	return reconcile.Result{}, nil
+	controllerutil.RemoveFinalizer(&cluster, clusterFinalizerName)
+	return reconcile.Result{}, c.Client.Update(ctx, &cluster)
 }
 
 func (c *ClusterReconciler) createCluster(ctx context.Context, cluster *v1alpha1.Cluster, log *zap.SugaredLogger) error {

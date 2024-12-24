@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/rancher/k3k/k3k-kubelet/translate"
 	"github.com/rancher/k3k/pkg/apis/k3k.io/v1alpha1"
 	"github.com/rancher/k3k/pkg/controller"
 	"github.com/rancher/k3k/pkg/controller/cluster/agent"
@@ -343,8 +344,9 @@ func (s *Server) StatefulServer(ctx context.Context) (*apps.StatefulSet, error) 
 
 	selector := metav1.LabelSelector{
 		MatchLabels: map[string]string{
-			"cluster": s.cluster.Name,
-			"role":    "server",
+			"cluster":                  s.cluster.Name,
+			"role":                     "server",
+			translate.ClusterNameLabel: s.cluster.Name,
 		},
 	}
 

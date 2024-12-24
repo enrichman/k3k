@@ -71,9 +71,10 @@ func (s *SharedAgent) Resources() []ctrlruntimeclient.Object {
 func (s *SharedAgent) deployment() *apps.Deployment {
 	selector := metav1.LabelSelector{
 		MatchLabels: map[string]string{
-			"cluster": s.cluster.Name,
-			"type":    "agent",
-			"mode":    "shared",
+			"cluster":                  s.cluster.Name,
+			"type":                     "agent",
+			"mode":                     "shared",
+			translate.ClusterNameLabel: s.cluster.Name,
 		},
 	}
 	name := s.Name()
@@ -163,9 +164,10 @@ func (s *SharedAgent) service() *v1.Service {
 		Spec: v1.ServiceSpec{
 			Type: v1.ServiceTypeClusterIP,
 			Selector: map[string]string{
-				"cluster": s.cluster.Name,
-				"type":    "agent",
-				"mode":    "shared",
+				"cluster":                  s.cluster.Name,
+				"type":                     "agent",
+				"mode":                     "shared",
+				translate.ClusterNameLabel: s.cluster.Name,
 			},
 			Ports: []v1.ServicePort{
 				{

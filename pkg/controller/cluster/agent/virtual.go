@@ -3,6 +3,7 @@ package agent
 import (
 	"fmt"
 
+	"github.com/rancher/k3k/k3k-kubelet/translate"
 	"github.com/rancher/k3k/pkg/apis/k3k.io/v1alpha1"
 	"github.com/rancher/k3k/pkg/controller"
 	apps "k8s.io/api/apps/v1"
@@ -65,9 +66,10 @@ func (v *VirtualAgent) deployment() *apps.Deployment {
 	const name = "k3k-agent"
 	selector := metav1.LabelSelector{
 		MatchLabels: map[string]string{
-			"cluster": v.cluster.Name,
-			"type":    "agent",
-			"mode":    "virtual",
+			"cluster":                  v.cluster.Name,
+			"type":                     "agent",
+			"mode":                     "virtual",
+			translate.ClusterNameLabel: v.cluster.Name,
 		},
 	}
 	return &apps.Deployment{

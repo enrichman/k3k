@@ -1,6 +1,7 @@
 package server
 
 import (
+	"github.com/rancher/k3k/k3k-kubelet/translate"
 	"github.com/rancher/k3k/pkg/apis/k3k.io/v1alpha1"
 	"github.com/rancher/k3k/pkg/controller"
 	v1 "k8s.io/api/core/v1"
@@ -29,8 +30,9 @@ func (s *Server) Service(cluster *v1alpha1.Cluster) *v1.Service {
 		Spec: v1.ServiceSpec{
 			Type: serviceType,
 			Selector: map[string]string{
-				"cluster": cluster.Name,
-				"role":    "server",
+				"cluster":                  cluster.Name,
+				"role":                     "server",
+				translate.ClusterNameLabel: s.cluster.Name,
 			},
 			Ports: []v1.ServicePort{
 				{
@@ -62,8 +64,9 @@ func (s *Server) StatefulServerService() *v1.Service {
 			Type:      v1.ServiceTypeClusterIP,
 			ClusterIP: v1.ClusterIPNone,
 			Selector: map[string]string{
-				"cluster": s.cluster.Name,
-				"role":    "server",
+				"cluster":                  s.cluster.Name,
+				"role":                     "server",
+				translate.ClusterNameLabel: s.cluster.Name,
 			},
 			Ports: []v1.ServicePort{
 				{
