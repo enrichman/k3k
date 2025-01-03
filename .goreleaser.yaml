@@ -64,7 +64,7 @@ dockers:
       - k3k
       - k3kcli
     dockerfile: "package/Dockerfile"
-    skip_push: true
+    skip_push: false
     image_templates:
       - "ghcr.io/enrichman/k3k:dev"
     build_flag_templates:
@@ -76,7 +76,7 @@ dockers:
     ids:
       - k3k-kubelet
     dockerfile: "package/Dockerfile.kubelet"
-    skip_push: true
+    skip_push: false
     image_templates:
       - "ghcr.io/enrichman/k3k:dev-kubelet"
     build_flag_templates:

@@ -59,4 +59,4 @@ jobs:
       with:
         distribution: goreleaser
         version: v2
-        args: --snapshot --clean
+        args: --snapshot --clean --skip archive
