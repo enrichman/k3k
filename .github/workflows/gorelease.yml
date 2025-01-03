@@ -55,7 +55,9 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Create fake tag
-      run: git tag $(git describe --tag --always)
+      run: |
+        CURRENT_TAG=$(git describe --tag --always)
+        git tag ${CURRENT_TAG}
 
     - name: Run GoReleaser
       uses: goreleaser/goreleaser-action@v6
@@ -63,5 +65,3 @@ jobs:
         distribution: goreleaser
         version: v2
         args: --clean
-      env:
-        GORELEASER_CURRENT_TAG: $(git describe --tag --always)
