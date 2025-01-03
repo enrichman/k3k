@@ -1,0 +1,77 @@
+name: Release - Test Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit:
+        type: string
+        description: Checkout the specified commit
+      registry:
+        type: choice
+        description: Select the container registry
+        options:
+        - ghcr.io
+        - dockerhub
+
+permissions:
+    contents: write
+    packages: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        fetch-tags: true
+    
+    - name: Checkout code at the specific commit
+      if: "${{ github.event.inputs.commit != '' }}"
+      run: git checkout ${{ github.event.inputs.commit }}
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+
+    - name: "Read secrets"
+      uses: rancher-eio/read-vault-secrets@main
+      if: "${{ github.event.inputs.registry == 'dockerhub' }}"
+      with:
+        secrets: |
+          secret/data/github/repo/${{ github.repository }}/dockerhub/${{ github.repository_owner }}/credentials username | DOCKER_USERNAME ;
+          secret/data/github/repo/${{ github.repository }}/dockerhub/${{ github.repository_owner }}/credentials password | DOCKER_PASSWORD ;
+
+    - name: Login to Docker Container Registry
+      uses: docker/login-action@v3
+      if: "${{ github.event.inputs.registry == 'dockerhub' }}"
+      with:
+        username: ${{ env.DOCKER_USERNAME }}
+        password: ${{ env.DOCKER_PASSWORD }}
+    
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@v3
+      if: "${{ github.event.inputs.registry != 'dockerhub' }}"
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
+
+    - name: Create fake tag
+      id: fake-tag
+      run: |
+        CURRENT_TAG=$(git describe --tag --always)
+        git tag ${CURRENT_TAG}
+        echo "CURRENT_TAG=${CURRENT_TAG}" >> "$GITHUB_OUTPUT"
+
+    - name: Run GoReleaser
+      uses: goreleaser/goreleaser-action@v6
+      with:
+        distribution: goreleaser
+        version: v2
+        args: --clean --config .goreleaser-draft.yaml
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+        GORELEASER_CURRENT_TAG: ${{ steps.fake-tag.outputs.CURRENT_TAG }}
+
