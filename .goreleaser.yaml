@@ -1,0 +1,90 @@
+version: 2
+
+release:
+  disable: true
+
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+
+builds:
+  - id: k3k
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - "amd64"
+      - "arm64"
+      - "s390x"
+
+  - id: k3k-kubelet
+    main: ./k3k-kubelet
+    binary: k3k-kubelet
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - "amd64"
+      - "arm64"
+      - "s390x"
+  
+  - id: k3kcli
+    main: ./cli
+    binary: k3kcli
+    env:
+      - CGO_ENABLED=0
+    goarch:
+      - "amd64"
+      - "arm64"
+
+# archives:
+#   - # https://goreleaser.com/errors/multiple-binaries-archive/
+#     allow_different_binary_count: true
+#     format: tar.gz
+#     # this name template makes the OS and Arch compatible with the results of `uname`.
+#     name_template: >-
+#       {{ .ProjectName }}_
+#       {{- title .Os }}_
+#       {{- if eq .Arch "amd64" }}x86_64
+#       {{- else if eq .Arch "386" }}i386
+#       {{- else }}{{ .Arch }}{{ end }}
+#       {{- if .Arm }}v{{ .Arm }}{{ end }}
+#     # use zip for windows archives
+#     format_overrides:
+#       - goos: windows
+#         format: zip
+
+dockers:
+  - id: k3k
+    use: docker
+    ids:
+      - k3k
+      - k3kcli
+    dockerfile: "package/Dockerfile"
+    skip_push: true
+    image_templates:
+      - "ghcr.io/enrichman/k3k:dev"
+    build_flag_templates:
+      - "--build-arg=BIN_K3K=k3k"
+      - "--build-arg=BIN_K3KCLI=k3kcli"
+
+  - id: k3k-kubelet
+    use: docker
+    ids:
+      - k3k-kubelet
+    dockerfile: "package/Dockerfile.kubelet"
+    skip_push: true
+    image_templates:
+      - "ghcr.io/enrichman/k3k:dev-kubelet"
+    build_flag_templates:
+      - "--build-arg=BIN_K3K_KUBELET=k3k-kubelet"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
