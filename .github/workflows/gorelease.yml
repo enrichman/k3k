@@ -55,9 +55,11 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Create fake tag
+      id: fake-tag
       run: |
         CURRENT_TAG=$(git describe --tag --always)
         git tag ${CURRENT_TAG}
+        echo "CURRENT_TAG=${CURRENT_TAG}" >> "$GITHUB_OUTPUT"
 
     - name: Run GoReleaser
       uses: goreleaser/goreleaser-action@v6
@@ -65,3 +67,5 @@ jobs:
         distribution: goreleaser
         version: v2
         args: --clean
+      env:
+        GORELEASER_CURRENT_TAG: ${{ steps.fake-tag.outputs.CURRENT_TAG }}
