@@ -59,4 +59,6 @@ jobs:
       with:
         distribution: goreleaser
         version: v2
-        args: --snapshot --clean --skip archive
+        args: --clean
+      env:
+        GORELEASER_CURRENT_TAG: "devel"
