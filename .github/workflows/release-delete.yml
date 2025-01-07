@@ -1,7 +1,11 @@
 name: Gorelease Release
 
 on:
-  release:
+  workflow_dispatch:
+    inputs:
+      tag:
+        type: string
+        description: Delete the specified tag
 
 permissions:
     contents: write
