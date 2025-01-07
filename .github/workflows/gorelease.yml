@@ -1,6 +1,8 @@
 name: Gorelease
 
 on:
+  release:
+    types: [ deleted ]
   workflow_dispatch:
     inputs:
       registry:
