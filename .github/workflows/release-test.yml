@@ -55,7 +55,7 @@ jobs:
     # - dockerhub: they will be stored in environment vars and secrets.
     # - ghcr.io: the github context can be used.
     - name: Setup docker credentials
-      if: "${{ (inputs.vault == false || inputs.vault == 'false') && inputs.registry == 'dockerhub' }}"
+      if: "${{ inputs.vault == false || inputs.vault == 'false' }}"
       run: |
         if ${{ inputs.registry == 'dockerhub' }}; then
           echo "DOCKER_USERNAME=${{ vars.DOCKER_USERNAME }}"    >> $GITHUB_ENV
