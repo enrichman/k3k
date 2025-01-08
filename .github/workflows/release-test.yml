@@ -51,23 +51,26 @@ jobs:
           secret/data/github/repo/${{ github.repository }}/dockerhub/${{ github.repository_owner }}/credentials username | DOCKER_USERNAME ;
           secret/data/github/repo/${{ github.repository }}/dockerhub/${{ github.repository_owner }}/credentials password | DOCKER_PASSWORD ;
 
-    # If Vault is disabled load the DOCKER_PASSWORD from secrets 
-    - name: Setup default docker credentials
+    # If Vault is disabled load the DOCKER_USERNAME and DOCKER_PASSWORD from elsewhere.
+    # - dockerhub: they will be stored in environment vars and secrets.
+    # - ghcr.io: the github context can be used.
+    - name: Setup docker credentials
       if: "${{ (inputs.vault == false || inputs.vault == 'false') && inputs.registry == 'dockerhub' }}"
-      run: echo "DOCKER_PASSWORD=${{ secrets.DOCKER_PASSWORD }}"  >> $GITHUB_ENV
-
-    - name: Setup registry environment
       run: |
+        if ${{ inputs.registry == 'dockerhub' }}; then
+          echo "DOCKER_USERNAME=${{ vars.DOCKER_USERNAME }}"    >> $GITHUB_ENV
+          echo "DOCKER_PASSWORD=${{ secrets.DOCKER_PASSWORD }}" >> $GITHUB_ENV
+        fi
+
         if ${{ inputs.registry == 'ghcr.io' }}; then
-          echo "REGISTRY=ghcr.io"                     >> $GITHUB_ENV
           echo "DOCKER_USERNAME=${{ github.actor }}"  >> $GITHUB_ENV
           echo "DOCKER_PASSWORD=${{ github.token }}"  >> $GITHUB_ENV
         fi
 
-        # if registry is dockerhub then we can clear the REGISTRY variable
-        if ${{ inputs.registry == 'dockerhub' }}; then
-          echo "REGISTRY=" >> $GITHUB_ENV
-        fi
+    # Set the registry if differs from Dockerhub
+    - name: Setup registry environment
+      if: ${{ inputs.registry != 'dockerhub' }}
+      run: echo "REGISTRY=${{ inputs.registry }}" >> $GITHUB_ENV
 
     - name: Login to container registry
       uses: docker/login-action@v3
