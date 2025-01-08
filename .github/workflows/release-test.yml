@@ -1,4 +1,4 @@
-name: Release - Test Build
+name: Release
 
 on:
   push:
@@ -37,15 +37,15 @@ jobs:
         fetch-tags: true
     
     - name: Checkout code at the specific commit
-      if: "${{ github.event.inputs.commit != '' }}"
-      run: git checkout ${{ github.event.inputs.commit }}
+      if: "${{ inputs.commit != '' }}"
+      run: git checkout ${{ inputs.commit }}
 
     - name: Set up Go
       uses: actions/setup-go@v5
 
     - name: "Read secrets"
       uses: rancher-eio/read-vault-secrets@main
-      if: "${{ github.event.inputs.vault }}"
+      if: "${{ inputs.vault == true || inputs.vault == 'true' }}"
       with:
         secrets: |
           secret/data/github/repo/${{ github.repository }}/dockerhub/${{ github.repository_owner }}/credentials username | DOCKER_USERNAME ;
@@ -53,14 +53,14 @@ jobs:
 
     - name: Setup registry environment
       run: |
-        if [ ${{ github.event.inputs.registry == 'ghcr.io' }} ]; then
+        if [ ${{ inputs.registry == 'ghcr.io' }} ]; then
           echo "REGISTRY=ghcr.io"                     >> "$GITHUB_ENV"
           echo "DOCKER_USERNAME=${{ github.actor }}"  >> "$GITHUB_ENV"
           echo "DOCKER_PASSWORD=${{ github.token }}"  >> "$GITHUB_ENV"
         fi
 
         # if registry is dockerhub then we can clear the REGISTRY variable
-        if [ ${{ github.event.inputs.registry == 'dockerhub' }} ]; then
+        if [ ${{ inputs.registry == 'dockerhub' }} ]; then
           echo "REGISTRY=" >> "$GITHUB_ENV"
         fi
 
