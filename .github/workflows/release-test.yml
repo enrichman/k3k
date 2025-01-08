@@ -68,7 +68,7 @@ jobs:
       run: |
         CURRENT_TAG=$(git describe --tag --always)
 
-        if git rev-parse "${CURRENT_TAG}" >/dev/null 2>&1; then
+        if git show-ref --tags ${CURRENT_TAG} --quiet; then
           echo "tag ${CURRENT_TAG} already exists";
         else
           echo "tag ${CURRENT_TAG} does not exist"
