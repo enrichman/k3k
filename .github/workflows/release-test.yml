@@ -18,7 +18,6 @@ on:
         description: Select the container registry
         default: ""
         options:
-        - ""
         - ghcr.io
         - dockerhub
 
@@ -54,7 +53,7 @@ jobs:
 
     - name: Setup registry environment
       run: |
-        echo $GITHUB_ENV
+        cat $GITHUB_ENV
 
         if [ ${{ inputs.registry == 'ghcr.io' }} ]; then
           echo "REGISTRY=ghcr.io"                     >> $GITHUB_ENV
@@ -62,14 +61,14 @@ jobs:
           echo "DOCKER_PASSWORD=${{ github.token }}"  >> $GITHUB_ENV
         fi
 
-        echo $GITHUB_ENV
+        cat $GITHUB_ENV
 
         # if registry is dockerhub then we can clear the REGISTRY variable
         if [ ${{ inputs.registry == 'dockerhub' }} ]; then
           echo "REGISTRY=" >> $GITHUB_ENV
         fi
 
-        echo $GITHUB_ENV
+        cat $GITHUB_ENV
 
     - name: Login to container registry
       uses: docker/login-action@v3
