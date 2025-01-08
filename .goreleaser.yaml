@@ -51,6 +51,12 @@ archives:
       - goos: windows
         format: zip
 
+# For the image_templates we are using the following expression to build images for the correct registry
+#    {{- if .Env.REGISTRY }}{{ .Env.REGISTRY }}/{{ end }}
+#
+# REGISTRY=        -> rancher/k3k:vX.Y.Z
+# REGISTRY=ghcr.io -> ghcr.io/rancher/k3k:latest:vX.Y.Z
+#
 dockers:
   - id: k3k
     use: docker
@@ -60,7 +66,7 @@ dockers:
     dockerfile: "package/Dockerfile"
     skip_push: false
     image_templates:
-      - "ghcr.io/enrichman/k3k:{{ .Tag }}"
+      - "{{- if .Env.REGISTRY }}{{ .Env.REGISTRY }}/{{ end }}{{ .Env.REPO }}:{{ .Tag }}"
     build_flag_templates:
       - "--build-arg=BIN_K3K=k3k"
       - "--build-arg=BIN_K3KCLI=k3kcli"
@@ -72,7 +78,7 @@ dockers:
     dockerfile: "package/Dockerfile.kubelet"
     skip_push: false
     image_templates:
-      - "ghcr.io/enrichman/k3k-kubelet:{{ .Tag }}"
+      - "{{- if .Env.REGISTRY }}{{ .Env.REGISTRY }}/{{ end }}{{ .Env.REPO }}-kubelet:{{ .Tag }}"
     build_flag_templates:
       - "--build-arg=BIN_K3K_KUBELET=k3k-kubelet"
 
