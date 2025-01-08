@@ -51,6 +51,11 @@ jobs:
           secret/data/github/repo/${{ github.repository }}/dockerhub/${{ github.repository_owner }}/credentials username | DOCKER_USERNAME ;
           secret/data/github/repo/${{ github.repository }}/dockerhub/${{ github.repository_owner }}/credentials password | DOCKER_PASSWORD ;
 
+    # If Vault is disabled load the DOCKER_PASSWORD from secrets 
+    - name: Setup default docker credentials
+      if: "${{ (inputs.vault == false || inputs.vault == 'false') && inputs.registry == 'dockerhub' }}"
+      run: echo "DOCKER_PASSWORD=${{ secrets.DOCKER_PASSWORD }}"  >> $GITHUB_ENV
+
     - name: Setup registry environment
       run: |
         if ${{ inputs.registry == 'ghcr.io' }}; then
