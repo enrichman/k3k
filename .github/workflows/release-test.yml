@@ -66,7 +66,14 @@ jobs:
       if: "${{ github.event_name == 'workflow_dispatch' }}"
       run: |
         CURRENT_TAG=$(git describe --tag --always)
-        git tag ${CURRENT_TAG}
+
+        if git rev-parse "${CURRENT_TAG}" >/dev/null 2>&1; then
+          echo "tag ${CURRENT_TAG} already exists";
+        else
+          echo "tag ${CURRENT_TAG} does not exist"
+          git tag ${CURRENT_TAG}
+        fi
+
         echo "CURRENT_TAG=${CURRENT_TAG}" >> "$GITHUB_OUTPUT"
 
     - name: Run GoReleaser
@@ -74,7 +81,7 @@ jobs:
       with:
         distribution: goreleaser
         version: v2
-        args: --clean --config .goreleaser-draft.yaml
+        args: --clean
       env:
         GITHUB_TOKEN: ${{ github.token }}
         GORELEASER_CURRENT_TAG: ${{ steps.fake-tag.outputs.CURRENT_TAG }}
