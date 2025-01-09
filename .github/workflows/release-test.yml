@@ -25,9 +25,7 @@ jobs:
 
     steps:
     - name: Check event
-      run: |
-        echo "event_name=${{github.event_name}}"
-        echo ${{ toJson(github.event) }}
+      run: echo "event_name=${{github.event_name}}"
 
     - name: Check if
       if: github.event == 'workflow_dispatch'
