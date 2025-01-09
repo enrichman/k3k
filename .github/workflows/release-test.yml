@@ -2,6 +2,7 @@ name: Gorelease
 
 on:
   release:
+  push:
   workflow_dispatch:
     inputs:
       registry:
@@ -23,5 +24,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+    - name: Check event
+      run: |
+        echo "event_name=${{github.event_name}}"
+        echo ${{ toJson(github.event) }}
+
+    - name: Check if
+      if: github.event == 'workflow_dispatch'
+      run: echo "event_name=${{github.event_name}}"
+
+    - name: Check if 2
+      if: github.event_name == 'workflow_dispatch'
+      run: echo "event_name=${{github.event_name}}"
+    
     - name: Checkout code
       uses: actions/checkout@v4
