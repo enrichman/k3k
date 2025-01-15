@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -92,7 +93,11 @@ func requestBootstrap(token, serverIP string) (*ControlRuntimeBootstrap, error) 
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Add("Authorization", "Basic "+basicAuth("server", token))
+
+	basicAuth := "Basic " + basicAuth("server", token)
+	req.Header.Add("Authorization", basicAuth)
+
+	fmt.Println("Requesting bootstrap", basicAuth, url)
 
 	resp, err := client.Do(req)
 	if err != nil {

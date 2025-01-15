@@ -14,6 +14,7 @@ import (
 	"github.com/rancher/k3k/pkg/controller/cluster/server/bootstrap"
 	"github.com/rancher/k3k/pkg/log"
 	"go.uber.org/zap"
+	apps "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -21,6 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlruntimecontroller "sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -64,6 +66,8 @@ func Add(ctx context.Context, mgr manager.Manager, sharedAgentImage string, logg
 		WithOptions(ctrlruntimecontroller.Options{
 			MaxConcurrentReconciles: maxConcurrentReconciles,
 		}).
+		Owns(&apps.StatefulSet{}).
+		Owns(&v1.Secret{}).
 		Complete(&reconciler)
 }
 
@@ -73,6 +77,8 @@ func (c *ClusterReconciler) Reconcile(ctx context.Context, req reconcile.Request
 		podList v1.PodList
 	)
 	log := c.logger.With("Cluster", req.NamespacedName)
+	log.Info("reconciling")
+
 	if err := c.Client.Get(ctx, req.NamespacedName, &cluster); err != nil {
 		return reconcile.Result{}, ctrlruntimeclient.IgnoreNotFound(err)
 	}
@@ -187,8 +193,25 @@ func (c *ClusterReconciler) createCluster(ctx context.Context, cluster *v1alpha1
 		return err
 	}
 
-	if err := c.Client.Create(ctx, bootstrapSecret); err != nil {
-		if !apierrors.IsAlreadyExists(err) {
+	if err := controllerutil.SetControllerReference(cluster, bootstrapSecret, c.Scheme); err != nil {
+		return err
+	}
+
+	fmt.Println("CreateOrUpdate bootstrapSecret")
+
+	key := client.ObjectKeyFromObject(bootstrapSecret)
+	if err := c.Client.Get(ctx, key, &v1.Secret{}); err == nil {
+		// no err, bootstrapSecret already exists
+		fmt.Println("bootstrapSecret exists, update")
+		if err := c.Client.Update(ctx, bootstrapSecret); err != nil {
+			return err
+		}
+	} else {
+		if !apierrors.IsNotFound(err) {
+			return err
+		}
+		fmt.Println("bootstrapSecret not found, create")
+		if err := c.Client.Create(ctx, bootstrapSecret); err != nil {
 			return err
 		}
 	}
