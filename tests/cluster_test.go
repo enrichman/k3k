@@ -68,6 +68,8 @@ var _ = When("a cluster is installed", func() {
 				}
 			}
 
+			fmt.Fprintf(GinkgoWriter, "server [%t] - kubelet [%t]\n", serverRunning, kubeletRunning)
+
 			return false
 		}).
 			WithTimeout(time.Minute).

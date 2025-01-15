@@ -41,15 +41,11 @@ func (c *ConfigMapSyncer) Reconcile(ctx context.Context, req reconcile.Request) 
 	var virtual corev1.ConfigMap
 
 	if err := c.VirtualClient.Get(ctx, req.NamespacedName, &virtual); err != nil {
-		return reconcile.Result{
-			Requeue: true,
-		}, fmt.Errorf("unable to get configmap %s/%s from virtual cluster: %w", req.Namespace, req.Name, err)
+		return reconcile.Result{}, fmt.Errorf("unable to get configmap %s/%s from virtual cluster: %w", req.Namespace, req.Name, err)
 	}
 	translated, err := c.TranslateFunc(&virtual)
 	if err != nil {
-		return reconcile.Result{
-			Requeue: true,
-		}, fmt.Errorf("unable to translate configmap %s/%s from virtual cluster: %w", req.Namespace, req.Name, err)
+		return reconcile.Result{}, fmt.Errorf("unable to translate configmap %s/%s from virtual cluster: %w", req.Namespace, req.Name, err)
 	}
 	translatedKey := types.NamespacedName{
 		Namespace: translated.Namespace,
@@ -58,15 +54,27 @@ func (c *ConfigMapSyncer) Reconcile(ctx context.Context, req reconcile.Request) 
 	var host corev1.ConfigMap
 	if err = c.HostClient.Get(ctx, translatedKey, &host); err != nil {
 		if apierrors.IsNotFound(err) {
-			err = c.HostClient.Create(ctx, translated)
 			// for simplicity's sake, we don't check for conflict errors. The existing object will get
 			// picked up on in the next re-enqueue
-			return reconcile.Result{
-					Requeue: true,
-				}, fmt.Errorf("unable to create host configmap %s/%s for virtual configmap %s/%s: %w",
+
+			fmt.Println("CM requeue?")
+
+			if err = c.HostClient.Create(ctx, translated); err != nil {
+				if apierrors.IsAlreadyExists(err) {
+					fmt.Println("CM requeue? YES!")
+
+					return reconcile.Result{Requeue: true}, nil
+				}
+				return reconcile.Result{}, fmt.Errorf("unable to create host configmap %s/%s for virtual configmap %s/%s: %w",
 					translated.Namespace, translated.Name, req.Namespace, req.Name, err)
+			}
+
+			fmt.Println("CM requeue? YES 2!")
+
+			return reconcile.Result{Requeue: true}, nil
+		} else {
+			return reconcile.Result{}, fmt.Errorf("unable to get host configmap %s/%s: %w", translated.Namespace, translated.Name, err)
 		}
-		return reconcile.Result{Requeue: true}, fmt.Errorf("unable to get host configmap %s/%s: %w", translated.Namespace, translated.Name, err)
 	}
 	// we are going to use the host in order to avoid conflicts on update
 	host.Data = translated.Data

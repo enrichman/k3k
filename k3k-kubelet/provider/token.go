@@ -9,8 +9,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -31,35 +31,55 @@ func (p *Provider) transformTokens(ctx context.Context, pod, tPod *corev1.Pod) e
 
 	virtualSecretName := k3kcontroller.SafeConcatNameWithPrefix(pod.Spec.ServiceAccountName, "token")
 	virtualSecret := virtualSecret(virtualSecretName, pod.Namespace, pod.Spec.ServiceAccountName)
-	if err := p.VirtualClient.Create(ctx, virtualSecret); err != nil {
-		if !apierrors.IsAlreadyExists(err) {
+
+	fmt.Println("delete virtual secret", client.ObjectKeyFromObject(virtualSecret))
+
+	if err := p.VirtualClient.Delete(ctx, virtualSecret); err != nil {
+		if !apierrors.IsNotFound(err) {
 			return err
 		}
 	}
-	// extracting the tokens data from the secret we just created
-	virtualSecretKey := types.NamespacedName{
-		Name:      virtualSecret.Name,
-		Namespace: virtualSecret.Namespace,
+
+	fmt.Println("create virtual secret", client.ObjectKeyFromObject(virtualSecret))
+
+	if err := p.VirtualClient.Create(ctx, virtualSecret); err != nil {
+		return err
 	}
+
+	// extracting the tokens data from the secret we just created
+	virtualSecretKey := client.ObjectKeyFromObject(virtualSecret)
+
+	fmt.Println("getting virtual secret", client.ObjectKeyFromObject(virtualSecret))
+
 	if err := p.VirtualClient.Get(ctx, virtualSecretKey, virtualSecret); err != nil {
 		return err
 	}
+
 	// To avoid race conditions we need to check if the secret's data has been populated
 	// including the token, ca.crt and namespace
 	if len(virtualSecret.Data) < 3 {
 		return fmt.Errorf("token secret %s/%s data is empty", virtualSecret.Namespace, virtualSecret.Name)
 	}
+
 	hostSecret := virtualSecret.DeepCopy()
 	hostSecret.Type = ""
 	hostSecret.Annotations = make(map[string]string)
 	p.Translater.TranslateTo(hostSecret)
 
-	if err := p.HostClient.Create(ctx, hostSecret); err != nil {
-		if !apierrors.IsAlreadyExists(err) {
+	fmt.Println("delete and create host secret")
+
+	if err := p.HostClient.Delete(ctx, hostSecret); err != nil {
+		if !apierrors.IsNotFound(err) {
 			return err
 		}
 	}
+
+	if err := p.HostClient.Create(ctx, hostSecret); err != nil {
+		return err
+	}
+
 	p.translateToken(tPod, hostSecret.Name)
+
 	return nil
 }
 
