@@ -99,3 +99,32 @@ jobs:
       with:
         name: k3s-logs
         path: /tmp/k3s.log
+
+  tests-conformance:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        fetch-tags: true
+
+    - uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+    
+    - name: Check go modules
+      run: |
+        go mod tidy
+
+        git --no-pager diff go.mod go.sum
+        test -z "$(git status --porcelain)"
+
+    - name: Install sonobuoy
+      run: |
+        wget -qO- https://github.com/vmware-tanzu/sonobuoy/releases/download/v0.57.2/sonobuoy_0.57.2_linux_amd64.tar.gz | gunzip | tar xvf -
+        mv sonobuoy /usr/local/bin
+
+    - name: Check sonobuoy
+      run: sonobuoy version
