@@ -3,6 +3,8 @@ package k3k_test
 import (
 	"context"
 	"fmt"
+	"os"
+	"path"
 	"strings"
 	"time"
 
@@ -51,7 +53,7 @@ var _ = When("a cluster is installed", func() {
 				},
 			},
 		}
-		virtualK8sClient := CreateCluster(containerIP, cluster)
+		_, virtualK8sClient := CreateCluster(containerIP, cluster)
 
 		nginxPod := &corev1.Pod{
 			ObjectMeta: v1.ObjectMeta{
@@ -96,7 +98,7 @@ var _ = When("a cluster is installed", func() {
 	})
 })
 
-func CreateCluster(hostIP string, cluster v1alpha1.Cluster) *kubernetes.Clientset {
+func CreateCluster(hostIP string, cluster v1alpha1.Cluster) (string, *kubernetes.Clientset) {
 	GinkgoHelper()
 
 	By(fmt.Sprintf("Creating virtual cluster %s/%s", cluster.Namespace, cluster.Name))
@@ -153,6 +155,10 @@ func CreateCluster(hostIP string, cluster v1alpha1.Cluster) *kubernetes.Clientse
 	configData, err := clientcmd.Write(*config)
 	Expect(err).To(Not(HaveOccurred()))
 
+	tmpKubeconfigPath := path.Join(os.TempDir(), cluster.Name+".yaml")
+	err = os.WriteFile(tmpKubeconfigPath, configData, 0644)
+	Expect(err).To(Not(HaveOccurred()))
+
 	restcfg, err := clientcmd.RESTConfigFromKubeConfig(configData)
 	Expect(err).To(Not(HaveOccurred()))
 	virtualK8sClient, err := kubernetes.NewForConfig(restcfg)
@@ -162,5 +168,5 @@ func CreateCluster(hostIP string, cluster v1alpha1.Cluster) *kubernetes.Clientse
 	Expect(err).To(Not(HaveOccurred()))
 	fmt.Fprintf(GinkgoWriter, "serverVersion: %+v\n", serverVersion)
 
-	return virtualK8sClient
+	return tmpKubeconfigPath, virtualK8sClient
 }

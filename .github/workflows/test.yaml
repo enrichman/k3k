@@ -128,3 +128,6 @@ jobs:
 
     - name: Check sonobuoy
       run: sonobuoy version
+    
+    - name: Run tests
+      run: ginkgo -v --label-filter="sonobuoy" ./tests
