@@ -48,9 +48,10 @@ var _ = When("sonobuoy", Label("sonobuoy"), func() {
 		kubeconfigPath, _ := CreateCluster(containerIP, cluster)
 
 		cmd := exec.Command("sonobuoy", "run", "--wait", "--mode", "quick", "--kubeconfig", kubeconfigPath)
-		fmt.Println("Running")
-
 		fmt.Fprintln(GinkgoWriter, "Running sonobuoy tests...")
-		Expect(cmd.Run()).To(Not(HaveOccurred()))
+
+		out, err := cmd.CombinedOutput()
+		fmt.Fprintln(GinkgoWriter, string(out))
+		Expect(err).To(Not(HaveOccurred()))
 	})
 })
