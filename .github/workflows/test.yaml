@@ -121,8 +121,10 @@ jobs:
         git --no-pager diff go.mod go.sum
         test -z "$(git status --porcelain)"
 
-    - name: Install sonobuoy
+    - name: Install ginkgo and sonobuoy
       run: |
+        go install github.com/onsi/ginkgo/v2/ginkgo
+
         wget -qO- https://github.com/vmware-tanzu/sonobuoy/releases/download/v0.57.2/sonobuoy_0.57.2_linux_amd64.tar.gz | gunzip | tar xvf -
         mv sonobuoy /usr/local/bin
 
