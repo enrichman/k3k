@@ -1,0 +1,5 @@
+#!/bin/bash
+
+set -euo pipefail
+
+git describe --tags --always --dirty --match="v[0-9]*"
