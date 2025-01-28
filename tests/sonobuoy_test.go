@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"strings"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -47,8 +49,11 @@ var _ = When("sonobuoy", Label("sonobuoy"), func() {
 
 		kubeconfigPath, _ := CreateCluster(containerIP, cluster)
 
-		cmd := exec.Command("sonobuoy", "run", "--wait", "--mode", "quick", "--kubeconfig", kubeconfigPath)
-		fmt.Fprintln(GinkgoWriter, "Running sonobuoy tests...")
+		ctx, _ = context.WithTimeout(ctx, time.Minute*15)
+		args := []string{"run", "--wait", "--mode", "quick", "--kubeconfig", kubeconfigPath}
+		cmd := exec.CommandContext(ctx, "sonobuoy", args...)
+
+		fmt.Fprintf(GinkgoWriter, "Running sonobuoy tests... [args=%s]\n", strings.Join(args, " "))
 
 		out, err := cmd.CombinedOutput()
 		fmt.Fprintln(GinkgoWriter, string(out))

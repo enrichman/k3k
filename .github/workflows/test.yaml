@@ -143,3 +143,10 @@ jobs:
     
     - name: Run tests
       run: ginkgo -v --label-filter="sonobuoy" ./tests
+
+    - name: Archive k3s logs
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: k3s-logs
+        path: /tmp/k3s.log
