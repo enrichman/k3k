@@ -90,3 +90,47 @@ jobs:
       with:
         name: k3k-logs
         path: /tmp/k3k.log
+
+  conformance:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        fetch-tags: true
+
+    - uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+    
+    - name: Check go modules
+      run: |
+        go mod tidy
+
+        git --no-pager diff go.mod go.sum
+        test -z "$(git status --porcelain)"
+
+    - name: Install hydrophone
+      run: go install sigs.k8s.io/hydrophone@latest
+    
+    - name: Build
+      run: |
+        ./scripts/build
+
+        # add k3kcli to $PATH
+        echo "${{ github.workspace }}/bin" >> $GITHUB_PATH
+
+    - name: Check k3kcli
+      run: k3kcli -v
+
+    - name: Run tests
+      run: ginkgo -v --label-filter="sonobuoy" ./tests
+
+    - name: Archive k3s logs
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: k3s-logs
+        path: /tmp/k3s.log
