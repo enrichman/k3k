@@ -6,9 +6,6 @@ on:
     tags:
     - "chart-*"
 
-env:
-    GITHUB_TOKEN: ${{ github.token }}
-
 permissions:
     contents: write
 
@@ -22,17 +19,18 @@ jobs:
           fetch-depth: 0
 
     - name: Check tag
+      if: github.event_name == 'push'
       run: |
         pushed_tag=$(echo ${{ github.ref_name }} | sed "s/chart-//")
         chart_tag=$(yq .version charts/k3k/Chart.yaml)
+        
         echo pushed_tag=${pushed_tag} chart_tag=${chart_tag}
+        [ "${pushed_tag}" == "${chart_tag}" ]
 
     - name: Configure Git
       run: |
         git config user.name "$GITHUB_ACTOR"
         git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
-    
-    # TODO: check if tag is the same of Chart.yaml
     
     - name: Install Helm
       uses: azure/setup-helm@v4
