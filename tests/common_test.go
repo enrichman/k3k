@@ -62,6 +62,20 @@ func NewVirtualCluster(cluster v1alpha1.Cluster) {
 func NewVirtualK8sClient(cluster v1alpha1.Cluster) *kubernetes.Clientset {
 	GinkgoHelper()
 
+	configData := GetKubeconfig(cluster)
+	restcfg, err := clientcmd.RESTConfigFromKubeConfig(configData)
+	Expect(err).To(Not(HaveOccurred()))
+
+	virtualK8sClient, err := kubernetes.NewForConfig(restcfg)
+	Expect(err).To(Not(HaveOccurred()))
+
+	return virtualK8sClient
+}
+
+// GetKubeconfig returns the kubeconfig file that can be used to reach the Virtual Cluster
+func GetKubeconfig(cluster v1alpha1.Cluster) []byte {
+	GinkgoHelper()
+
 	var err error
 	ctx := context.Background()
 
@@ -80,10 +94,5 @@ func NewVirtualK8sClient(cluster v1alpha1.Cluster) *kubernetes.Clientset {
 	configData, err := clientcmd.Write(*config)
 	Expect(err).To(Not(HaveOccurred()))
 
-	restcfg, err := clientcmd.RESTConfigFromKubeConfig(configData)
-	Expect(err).To(Not(HaveOccurred()))
-	virtualK8sClient, err := kubernetes.NewForConfig(restcfg)
-	Expect(err).To(Not(HaveOccurred()))
-
-	return virtualK8sClient
+	return configData
 }
