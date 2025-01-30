@@ -112,8 +112,10 @@ jobs:
         git --no-pager diff go.mod go.sum
         test -z "$(git status --porcelain)"
 
-    - name: Install hydrophone
-      run: go install sigs.k8s.io/hydrophone@latest
+    - name: Install ginkgo and hydrophone
+      run: |
+        go install github.com/onsi/ginkgo/v2/ginkgo
+        go install sigs.k8s.io/hydrophone@latest
     
     - name: Build
       run: |
