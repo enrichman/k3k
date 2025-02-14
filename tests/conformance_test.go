@@ -57,8 +57,10 @@ var _ = When("hydrophone", Label("hydrophone"), func() {
 		err = os.WriteFile(tempfile, []byte(kubeconfig), 0644)
 		Expect(err).To(Not(HaveOccurred()))
 
-		ctx, _ = context.WithTimeout(ctx, time.Minute*15)
-		args := []string{"--focus", "'Simple pod should contain last line of the log'", "--kubeconfig", tempfile}
+		ctx, cancel := context.WithTimeout(ctx, time.Minute*15)
+		defer cancel()
+
+		args := []string{"--focus", "pod", "--kubeconfig", tempfile}
 		cmd := exec.CommandContext(ctx, "hydrophone", args...)
 
 		fmt.Fprintf(GinkgoWriter, "Running hydrophone tests... [args=%s]\n", strings.Join(args, " "))
