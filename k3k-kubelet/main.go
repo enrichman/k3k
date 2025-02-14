@@ -99,7 +99,7 @@ func main() {
 			EnvVars:     []string{"DEBUG"},
 		},
 	}
-	app.Before = func(clx *cli.Context) error {
+	app.Before = func(_ *cli.Context) error {
 		logger = log.New(debug)
 		ctrlruntimelog.SetLogger(zapr.NewLogger(logger.Desugar().WithOptions(zap.AddCallerSkip(1))))
 		return nil
@@ -110,7 +110,7 @@ func main() {
 	}
 }
 
-func run(clx *cli.Context) error {
+func run(_ *cli.Context) error {
 	ctx := context.Background()
 	if err := cfg.parse(configFile); err != nil {
 		logger.Fatalw("failed to parse config file", "path", configFile, zap.Error(err))

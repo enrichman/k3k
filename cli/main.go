@@ -15,7 +15,7 @@ import (
 func main() {
 	app := cmds.NewApp()
 	app.Version = buildinfo.Version
-	cli.VersionPrinter = func(cCtx *cli.Context) {
+	cli.VersionPrinter = func(_ *cli.Context) {
 		fmt.Println("k3kcli Version: " + buildinfo.Version)
 	}
 

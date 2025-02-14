@@ -37,7 +37,7 @@ type ServiceReconciler struct {
 }
 
 // AddServiceSyncer adds service syncer controller to the manager of the virtual cluster
-func AddServiceSyncer(ctx context.Context, virtMgr, hostMgr manager.Manager, clusterName, clusterNamespace string, logger *log.Logger) error {
+func AddServiceSyncer(virtMgr, hostMgr manager.Manager, clusterName, clusterNamespace string, logger *log.Logger) error {
 	translator := translate.ToHostTranslator{
 		ClusterName:      clusterName,
 		ClusterNamespace: clusterNamespace,

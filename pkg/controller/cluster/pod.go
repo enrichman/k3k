@@ -42,7 +42,7 @@ type PodReconciler struct {
 }
 
 // Add adds a new controller to the manager
-func AddPodController(ctx context.Context, mgr manager.Manager) error {
+func AddPodController(mgr manager.Manager) error {
 	// initialize a new Reconciler
 	reconciler := PodReconciler{
 		Client: mgr.GetClient(),

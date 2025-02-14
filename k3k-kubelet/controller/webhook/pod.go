@@ -67,7 +67,7 @@ func AddPodMutatorWebhook(ctx context.Context, mgr manager.Manager, hostClient c
 	return ctrl.NewWebhookManagedBy(mgr).For(&v1.Pod{}).WithDefaulter(&handler).Complete()
 }
 
-func (w *webhookHandler) Default(ctx context.Context, obj runtime.Object) error {
+func (w *webhookHandler) Default(_ context.Context, obj runtime.Object) error {
 	pod, ok := obj.(*v1.Pod)
 	if !ok {
 		return fmt.Errorf("invalid request: object was type %t not cluster", obj)

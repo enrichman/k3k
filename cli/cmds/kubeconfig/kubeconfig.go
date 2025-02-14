@@ -100,7 +100,7 @@ func NewCommand() *cli.Command {
 	}
 }
 
-func generate(clx *cli.Context) error {
+func generate(_ *cli.Context) error {
 	var cluster v1alpha1.Cluster
 	ctx := context.Background()
 

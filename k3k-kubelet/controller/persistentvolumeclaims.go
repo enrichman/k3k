@@ -35,7 +35,7 @@ type PVCReconciler struct {
 }
 
 // AddPVCSyncer adds persistentvolumeclaims syncer controller to k3k-kubelet
-func AddPVCSyncer(ctx context.Context, virtMgr, hostMgr manager.Manager, clusterName, clusterNamespace string, logger *log.Logger) error {
+func AddPVCSyncer(virtMgr, hostMgr manager.Manager, clusterName, clusterNamespace string, logger *log.Logger) error {
 	translator := translate.ToHostTranslator{
 		ClusterName:      clusterName,
 		ClusterNamespace: clusterNamespace,

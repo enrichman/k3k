@@ -44,7 +44,7 @@ func NewApp() *cli.App {
 		},
 	}
 
-	app.Before = func(clx *cli.Context) error {
+	app.Before = func(_ *cli.Context) error {
 		if debug {
 			logrus.SetLevel(logrus.DebugLevel)
 		}

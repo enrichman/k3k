@@ -132,12 +132,12 @@ func newKubelet(ctx context.Context, c *config, logger *k3klog.Logger) (*kubelet
 	}
 
 	logger.Info("adding service syncer controller")
-	if err := k3kkubeletcontroller.AddServiceSyncer(ctx, virtualMgr, hostMgr, c.ClusterName, c.ClusterNamespace, k3klog.New(false)); err != nil {
+	if err := k3kkubeletcontroller.AddServiceSyncer(virtualMgr, hostMgr, c.ClusterName, c.ClusterNamespace, k3klog.New(false)); err != nil {
 		return nil, errors.New("failed to add service syncer controller: " + err.Error())
 	}
 
 	logger.Info("adding pvc syncer controller")
-	if err := k3kkubeletcontroller.AddPVCSyncer(ctx, virtualMgr, hostMgr, c.ClusterName, c.ClusterNamespace, k3klog.New(false)); err != nil {
+	if err := k3kkubeletcontroller.AddPVCSyncer(virtualMgr, hostMgr, c.ClusterName, c.ClusterNamespace, k3klog.New(false)); err != nil {
 		return nil, errors.New("failed to add pvc syncer controller: " + err.Error())
 	}
 

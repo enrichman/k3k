@@ -17,7 +17,7 @@ func New(debug bool) *Logger {
 	return &Logger{newZappLogger(debug).Sugar()}
 }
 
-func (l *Logger) WithError(err error) log.Logger {
+func (l *Logger) WithError(error) log.Logger {
 	return l
 }
 
@@ -25,7 +25,7 @@ func (l *Logger) WithField(string, interface{}) log.Logger {
 	return l
 }
 
-func (l *Logger) WithFields(field log.Fields) log.Logger {
+func (l *Logger) WithFields(log.Fields) log.Logger {
 	return l
 }
 
