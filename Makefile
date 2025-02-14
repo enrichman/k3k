@@ -66,7 +66,11 @@ test-controller:	## Run the controller tests (pkg/controller)
 
 .PHONY: test-e2e
 test-e2e:	## Run the e2e tests
-	$(GINKGO) -v -r tests
+	$(GINKGO) -v -r --label-filter="!hydrophone" tests
+
+.PHONY: test-conformance
+test-conformance:	## Run the e2e tests
+	$(GINKGO) -v -r --label-filter="hydrophone" tests
 
 .PHONY: build-crds
 build-crds:	## Build the CRDs specs
