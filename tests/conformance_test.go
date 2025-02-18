@@ -40,6 +40,9 @@ var _ = When("hydrophone", Label("hydrophone"), func() {
 				Namespace: namespace,
 			},
 			Spec: v1alpha1.ClusterSpec{
+				ServerArgs: []string{
+					"--kube-apiserver-arg", "feature-gates=kube:DynamicResourceAllocation=true",
+				},
 				TLSSANs: []string{containerIP},
 				Expose: &v1alpha1.ExposeConfig{
 					NodePort: &v1alpha1.NodePortConfig{},
@@ -60,7 +63,7 @@ var _ = When("hydrophone", Label("hydrophone"), func() {
 		ctx, cancel := context.WithTimeout(ctx, time.Minute*15)
 		defer cancel()
 
-		args := []string{"--focus", "pod", "--kubeconfig", tempfile}
+		args := []string{"--focus", "pod", "-v", "6", "--kubeconfig", tempfile}
 		cmd := exec.CommandContext(ctx, "hydrophone", args...)
 
 		fmt.Fprintf(GinkgoWriter, "Running hydrophone tests... [args=%s]\n", strings.Join(args, " "))
