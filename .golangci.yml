@@ -10,3 +10,20 @@ linters:
 
   # extra
   - misspell
+  - revive
+
+linters-settings:
+  revive:
+    rules:
+      - name: unused-parameter
+        disabled: true
+      - name: redefines-builtin-id
+        disabled: true
+      - name: dot-imports
+        disabled: true
+      - name: exported
+        disabled: true
+      - name: error-strings
+        disabled: true
+      - name: var-declaration
+        disabled: true
