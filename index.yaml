@@ -2,6 +2,16 @@ apiVersion: v1
 entries:
   k3k:
   - apiVersion: v2
+    appVersion: v0.3.2-rc1
+    created: "2025-04-08T07:35:31.305719303Z"
+    description: A Helm chart for K3K
+    digest: 01de4316731ada40f9f34d241b651f06c803f24b14671d8cad235bac29861780
+    name: k3k
+    type: application
+    urls:
+    - https://github.com/enrichman/k3k/releases/download/chart-0.3.2-rc1/k3k-0.3.2-rc1.tgz
+    version: 0.3.2-rc1
+  - apiVersion: v2
     appVersion: v0.2.2-rc4
     created: "2025-01-30T22:23:30.443147379Z"
     description: A Helm chart for K3K
@@ -81,4 +91,4 @@ entries:
     urls:
     - https://github.com/rancher/k3k/releases/download/chart-0.1.0-r1/k3k-0.1.0-r1.tgz
     version: 0.1.0-r1
-generated: "2025-01-30T22:23:30.443192463Z"
+generated: "2025-04-08T07:35:31.305770499Z"
