@@ -12,8 +12,12 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/rancher/k3k/pkg/apis/k3k.io/v1alpha1"
+	"github.com/rancher/k3k/pkg/controller/certs"
+	"github.com/rancher/k3k/pkg/controller/kubeconfig"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/clientcmd"
+	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
 
 var _ = When("hydrophone", Label("hydrophone"), func() {
@@ -34,7 +38,7 @@ var _ = When("hydrophone", Label("hydrophone"), func() {
 
 		fmt.Fprintln(GinkgoWriter, "K3s containerIP: "+containerIP)
 
-		cluster := v1alpha1.Cluster{
+		cluster := &v1alpha1.Cluster{
 			ObjectMeta: v1.ObjectMeta{
 				Name:      "mycluster",
 				Namespace: namespace,
@@ -51,10 +55,25 @@ var _ = When("hydrophone", Label("hydrophone"), func() {
 		}
 
 		By(fmt.Sprintf("Creating virtual cluster %s/%s", cluster.Namespace, cluster.Name))
-		NewVirtualCluster(cluster)
+		CreateCluster(cluster)
 
 		By("Get the kubeconfig for the virtual cluster")
-		kubeconfig := GetKubeconfig(cluster)
+
+		var config *clientcmdapi.Config
+
+		Eventually(func() error {
+			vKubeconfig := kubeconfig.New()
+			kubeletAltName := fmt.Sprintf("k3k-%s-kubelet", cluster.Name)
+			vKubeconfig.AltNames = certs.AddSANs([]string{hostIP, kubeletAltName})
+			config, err = vKubeconfig.Extract(ctx, k8sClient, cluster, hostIP)
+			return err
+		}).
+			WithTimeout(time.Minute * 2).
+			WithPolling(time.Second * 5).
+			Should(BeNil())
+
+		kubeconfig, err := clientcmd.Write(*config)
+		Expect(err).To(Not(HaveOccurred()))
 
 		tempfile := path.Join(os.TempDir(), cluster.Name+"-kubeconfig.yaml")
 		err = os.WriteFile(tempfile, []byte(kubeconfig), 0644)
