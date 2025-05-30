@@ -12,6 +12,7 @@ import (
 	"github.com/rancher/k3k/pkg/apis/k3k.io/v1alpha1"
 	"github.com/rancher/k3k/pkg/buildinfo"
 	"github.com/rancher/k3k/pkg/controller/cluster"
+	"github.com/rancher/k3k/pkg/controller/generic"
 	"github.com/rancher/k3k/pkg/controller/policy"
 	"github.com/rancher/k3k/pkg/log"
 	"github.com/urfave/cli/v2"
@@ -144,6 +145,10 @@ func run(clx *cli.Context) error {
 
 	if err := policy.Add(mgr, clusterCIDR); err != nil {
 		return fmt.Errorf("failed to add the clusterpolicy controller: %v", err)
+	}
+
+	if err := generic.Add(mgr); err != nil {
+		return fmt.Errorf("failed to add the generic controller: %v", err)
 	}
 
 	if err := mgr.Start(ctx); err != nil {
