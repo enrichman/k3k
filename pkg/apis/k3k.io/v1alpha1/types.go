@@ -447,3 +447,51 @@ type VirtualClusterPolicyList struct {
 
 	Items []VirtualClusterPolicy `json:"items"`
 }
+
+// GVKConfig defines the Group, Version, and Kind of a Kubernetes resource.
+type GVKConfig struct {
+	Group   string `json:"group"`
+	Version string `json:"version"`
+	Kind    string `json:"kind"`
+}
+
+// TargetClusterRef defines a reference to a target Kubernetes cluster.
+type TargetClusterRef struct {
+	Name      string `json:"name"`      // Name of your v1alpha1.Cluster CR
+	Namespace string `json:"namespace"` // Namespace of your v1alpha1.Cluster CR
+}
+
+// SyncRuleSpec defines the desired state of SyncRule.
+type SyncRuleSpec struct {
+	SourceGVK       GVKConfig        `json:"sourceGVK"`
+	SourceNamespace string           `json:"sourceNamespace,omitempty"`
+	TargetCluster   TargetClusterRef `json:"targetCluster"`
+	TargetNamespace string           `json:"targetNamespace,omitempty"`
+}
+
+// SyncRuleStatus defines the observed state of SyncRule.
+type SyncRuleStatus struct {
+	ObservedGeneration int64              `json:"observedGeneration,omitempty"`
+	Conditions         []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
+}
+
+//+kubebuilder:object:root=true
+//+kubebuilder:subresource:status
+//+kubebuilder:resource:scope=Cluster,shortName=k3ksr
+//+kubebuilder:printcolumn:name="Source Kind",type="string",JSONPath=".spec.sourceGVK.kind"
+//+kubebuilder:printcolumn:name="Target Cluster",type="string",JSONPath=".spec.targetCluster.name"
+//+kubebuilder:printcolumn:name="Status",type="string",JSONPath=`.status.conditions[?(@.type=="Synced")].status`
+
+type SyncRule struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Spec              SyncRuleSpec   `json:"spec,omitempty"`
+	Status            SyncRuleStatus `json:"status,omitempty"`
+}
+
+// +kubebuilder:object:root=true
+type SyncRuleList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []SyncRule `json:"items"`
+}
