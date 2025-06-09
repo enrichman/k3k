@@ -330,6 +330,7 @@ func (s *DynamicResourceSyncer) Reconcile(ctx context.Context, req ctrl.Request)
 		}
 
 		logger.Error(err, "Failed to get source resource")
+
 		return ctrl.Result{}, err
 	}
 
@@ -382,6 +383,7 @@ func (s *DynamicResourceSyncer) Reconcile(ctx context.Context, req ctrl.Request)
 			// C. Requeue the reconciliation.
 			// Give the target API server a moment to register the newly created CRD.
 			logger.Info("CRD sync successful. Requeuing original request to retry.", "requeueAfter", "2s")
+
 			return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
 		}
 
@@ -399,8 +401,10 @@ func (s *DynamicResourceSyncer) Reconcile(ctx context.Context, req ctrl.Request)
 		targetKey := client.ObjectKeyFromObject(targetResource)
 		if errGetTarget := targetK8sClient.Get(ctx, targetKey, updatedTargetForStatus); errGetTarget == nil {
 			currentTargetStatus, _, _ := unstructured.NestedMap(updatedTargetForStatus.Object, "status")
+
 			if !reflect.DeepEqual(sourceStatus, currentTargetStatus) {
 				logger.Info("Attempting to sync status from source to target", "target", targetKey)
+
 				if errSetStatus := unstructured.SetNestedMap(updatedTargetForStatus.Object, sourceStatus, "status"); errSetStatus != nil {
 					logger.Error(errSetStatus, "Failed to set status on target object for update")
 				} else {
@@ -424,23 +428,29 @@ func filterMetadata(annotations map[string]string) map[string]string {
 	if annotations == nil {
 		return nil
 	}
+
 	filtered := make(map[string]string)
+
 	// Consider making this denylist configurable via SyncRule or controller config
 	denylist := []string{
 		"kubectl.kubernetes.io/last-applied-configuration",
 	}
+
 	for k, v := range annotations {
 		isDenied := false
+
 		for _, deniedKey := range denylist {
 			if strings.HasPrefix(k, deniedKey) { // Use HasPrefix for broader matches like controller specific annotations
 				isDenied = true
 				break
 			}
 		}
+
 		if !isDenied {
 			filtered[k] = v
 		}
 	}
+
 	return filtered
 }
 
@@ -496,6 +506,7 @@ func (s *DynamicResourceSyncer) syncCRD(ctx context.Context, opCtx context.Conte
 			logger.Info("CRD already exists on target cluster.", "crdName", targetCRD.Name)
 			return nil // Success, we can proceed with the retry.
 		}
+
 		return fmt.Errorf("failed to create CRD %s on target cluster: %w", targetCRD.Name, err)
 	}
 
