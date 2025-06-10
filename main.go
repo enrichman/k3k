@@ -153,7 +153,7 @@ func run(clx *cli.Context) error {
 	// 	return fmt.Errorf("failed to add the generic controller: %v", err)
 	// }
 
-	if err := generic.SetupWithManager(mgr); err != nil {
+	if err := generic.SetupWithManager(ctx, mgr); err != nil {
 		return fmt.Errorf("failed to add the generic dynamic controller: %v", err)
 	}
 

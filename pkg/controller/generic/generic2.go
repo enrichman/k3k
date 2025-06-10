@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-logr/logr"
 	"github.com/rancher/k3k/pkg/apis/k3k.io/v1alpha1"
 	"github.com/rancher/k3k/pkg/controller/cluster/server"
 	"github.com/rancher/k3k/pkg/controller/kubeconfig"
@@ -20,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
@@ -45,6 +47,7 @@ type DynamicSyncerConfig struct {
 	SourceNamespace    string
 	TargetClusterRef   v1alpha1.TargetClusterRef
 	TargetNamespace    string
+	Workqueue          workqueue.TypedRateLimitingInterface[reconcile.Request] // <-- ADD THIS
 }
 
 type DynamicResourceSyncer struct {
@@ -299,4 +302,41 @@ func (s *DynamicResourceSyncer) syncCRD(ctx context.Context, opCtx context.Conte
 	logger.Info("Successfully created CRD on target cluster", "crdName", targetCRD.Name)
 
 	return nil
+}
+
+// processNextWorkItem is the standard worker loop logic
+func (s *DynamicResourceSyncer) processNextWorkItem(ctx context.Context, logger logr.Logger) bool {
+	req, shutdown := s.Config.Workqueue.Get()
+	if shutdown {
+		return false // Queue is shutting down
+	}
+	defer s.Config.Workqueue.Done(req)
+
+	result, err := s.Reconcile(ctx, req)
+	if err != nil {
+		s.Config.Workqueue.AddRateLimited(req)
+		logger.Error(err, "Reconciliation failed, item requeued", "request", req)
+
+		return true
+	}
+
+	if result.RequeueAfter > 0 {
+		s.Config.Workqueue.AddAfter(req, result.RequeueAfter)
+		logger.V(1).Info("Reconciliation requested requeue after delay", "request", req, "delay", result.RequeueAfter.String())
+
+		return true
+	}
+
+	if result.Requeue {
+		s.Config.Workqueue.AddRateLimited(req)
+		logger.V(1).Info("Reconciliation requested immediate requeue", "request", req)
+
+		return true
+	}
+
+	// Forget the item on success, so we don't retry it.
+	s.Config.Workqueue.Forget(req)
+	logger.Info("Successfully reconciled", "request", req)
+
+	return true // Return true to continue the worker loop
 }

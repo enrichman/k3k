@@ -2,59 +2,85 @@ package generic
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"strings"
 	"sync"
-	"time"
 
 	"github.com/rancher/k3k/pkg/apis/k3k.io/v1alpha1"
-	kerrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/dynamic/dynamicinformer"
+	"k8s.io/client-go/rest"
+	gocache "k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
-	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
-
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 // SyncRuleReconciler reconciles a SyncRule object
 type SyncRuleReconciler struct {
+	AppCtx context.Context
 	client.Client
-	*runtime.Scheme
-	ctrl.Manager
+	Scheme *runtime.Scheme
 
-	managerStarted bool
+	// Use the manager's components
+	Cache      cache.Cache
+	Config     *rest.Config
+	RESTMapper meta.RESTMapper
+
+	// Shared factory for all dynamic informers, created once.
+	dynamicClient   dynamic.Interface
+	informerFactory dynamicinformer.DynamicSharedInformerFactory
 
 	// dynamic controllers lifecycle management
-	activeControllers   map[string]*DynamicController
+	activeControllers   map[types.NamespacedName]context.CancelFunc
 	activeControllersMu sync.RWMutex
 }
 
-func SetupWithManager(mgr ctrl.Manager) error {
-	r := &SyncRuleReconciler{
-		Client:            mgr.GetClient(),
-		Scheme:            mgr.GetScheme(),
-		Manager:           mgr,
-		activeControllers: make(map[string]*DynamicController),
+func SetupWithManager(ctx context.Context, mgr ctrl.Manager) error {
+	dynamicClient, err := dynamic.NewForConfig(mgr.GetConfig())
+	if err != nil {
+		return fmt.Errorf("failed to create dynamic client: %w", err)
 	}
 
-	// Listen for manager start to set flag
-	go func() {
-		<-mgr.Elected()
+	informerFactory := dynamicinformer.NewDynamicSharedInformerFactory(dynamicClient, 0)
 
-		r.activeControllersMu.Lock()
-		r.managerStarted = true
-		r.activeControllersMu.Unlock()
-	}()
+	r := &SyncRuleReconciler{
+		AppCtx:            ctx,
+		Client:            mgr.GetClient(),
+		Scheme:            mgr.GetScheme(),
+		Cache:             mgr.GetCache(),
+		Config:            mgr.GetConfig(),
+		RESTMapper:        mgr.GetRESTMapper(),
+		dynamicClient:     dynamicClient,
+		informerFactory:   informerFactory,
+		activeControllers: make(map[types.NamespacedName]context.CancelFunc),
+	}
+
+	if err := mgr.Add(r); err != nil {
+		return fmt.Errorf("failed to add runnable to manager: %w", err)
+	}
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.SyncRule{}).
 		Complete(r)
+}
+
+// Start is called by the Manager. It starts the dynamic informer factory.
+func (r *SyncRuleReconciler) Start(ctx context.Context) error {
+	logger := log.Log.WithName("syncrule-runnable")
+	logger.Info("SyncRuleReconciler runnable has been started by the manager.")
+
+	r.informerFactory.Start(ctx.Done())
+
+	return nil
 }
 
 func (r *SyncRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -62,16 +88,23 @@ func (r *SyncRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	var syncRule v1alpha1.SyncRule
 	if err := r.Get(ctx, req.NamespacedName, &syncRule); err != nil {
-		if kerrors.IsNotFound(err) {
-			logger.Info("SyncRule not found")
-
+		if errors.IsNotFound(err) {
+			logger.Info("SyncRule not found. Stopping associated watcher.")
+			r.stopDynamicController(req.NamespacedName)
 			return ctrl.Result{}, nil
 		}
-
 		return ctrl.Result{}, fmt.Errorf("failed to get SyncRule: %w", err)
 	}
 
-	// Group, Kind and Version of the resource to watch
+	if !syncRule.DeletionTimestamp.IsZero() {
+		logger.Info("SyncRule is being deleted. Stopping watcher.")
+		r.stopDynamicController(req.NamespacedName)
+		return ctrl.Result{}, nil
+	}
+
+	logger.Info("Reconciling SyncRule, stopping any existing watcher to apply latest config.")
+	r.stopDynamicController(req.NamespacedName)
+
 	sourceGVK := schema.GroupVersionKind{
 		Group:   syncRule.Spec.SourceGVK.Group,
 		Version: syncRule.Spec.SourceGVK.Version,
@@ -79,159 +112,136 @@ func (r *SyncRuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	syncerConfig := DynamicSyncerConfig{
-		RuleNamespacedName: req.NamespacedName,
+		RuleNamespacedName: req.NamespacedName, // The key of the SyncRule CR itself
 		SourceGVK:          sourceGVK,
 		SourceNamespace:    syncRule.Spec.SourceNamespace,
 		TargetClusterRef:   syncRule.Spec.TargetCluster,
 		TargetNamespace:    syncRule.Spec.TargetNamespace,
 	}
 
-	if err := r.startDynamicController(ctx, req.NamespacedName, syncerConfig); err != nil {
-		logger.Error(err, "Failed to start dynamic controller for rule")
-
+	// Pass the main application context as the parent
+	if err := r.startDynamicController(r.AppCtx, req.NamespacedName, syncerConfig); err != nil {
+		logger.Error(err, "Failed to start dynamic watcher for rule")
 		return ctrl.Result{}, err
 	}
 
-	logger.Info("Dynamic controller initiated for rule.")
-
-	// TODO: Update status of SyncRule ("Active")
-
+	logger.Info("Dynamic watcher was successfully started/restarted for rule.")
 	return ctrl.Result{}, nil
 }
 
 func (r *SyncRuleReconciler) startDynamicController(
-	ctx context.Context,
+	parentCtx context.Context,
 	ruleKey types.NamespacedName,
 	config DynamicSyncerConfig,
 ) error {
-	r.activeControllersMu.Lock()
-	defer r.activeControllersMu.Unlock()
+	logger := log.FromContext(parentCtx).WithValues("rule", ruleKey, "gvk", config.SourceGVK)
 
-	// Wait for main manager to be started
-	if !r.managerStarted {
-		return fmt.Errorf("main manager not yet started, requeuing")
-	}
-
-	// Create a unique key for this controller
-	controllerName := fmt.Sprintf("%s-%s-%s-%s-%d",
-		config.SourceGVK.Group,
-		config.SourceGVK.Version,
-		config.SourceGVK.Kind,
-		ruleKey.String(),
-		time.Now().Unix(),
-	)
-	controllerName = strings.ToLower(strings.ReplaceAll(controllerName, "/", "-"))
-
-	logger := log.FromContext(ctx).WithValues("dynamicController", controllerName, "rule", ruleKey)
-
-	// Check if controller already exists and is running
-	if existingController, exists := r.activeControllers[controllerName]; exists {
-		existingController.mutex.RLock()
-		isStarted := existingController.Started
-		existingController.mutex.RUnlock()
-
-		if isStarted {
-			logger.Info("Controller already running", "controllerName", controllerName)
-			return nil
-		}
-
-		// Clean up the non-started controller
-		r.cleanupController(controllerName, existingController)
-	}
-
-	// Create new controller with proper context management
-	dynCtx, dynCancel := context.WithCancel(context.Background())
-
-	// Create a new manager for this dynamic controller
-	restConfig := r.Manager.GetConfig()
-
-	dynamicMgr, err := ctrl.NewManager(restConfig, ctrl.Options{
-		Scheme:                 r.Scheme,
-		Metrics:                metricsserver.Options{BindAddress: "0"}, // Disable metrics for dynamic controllers
-		HealthProbeBindAddress: "0",                                     // Disable health probe
-		LeaderElection:         false,                                   // Disable leader election for dynamic controllers
-		Cache: cache.Options{
-			// Only watch the specific namespace if specified
-			DefaultNamespaces: map[string]cache.Config{
-				config.SourceNamespace: {},
-			},
-		},
-	})
+	mapping, err := r.RESTMapper.RESTMapping(config.SourceGVK.GroupKind(), config.SourceGVK.Version)
 	if err != nil {
-		dynCancel()
-		return fmt.Errorf("failed to create dynamic manager: %w", err)
+		return fmt.Errorf("failed to map GVK %v to GVR: %w", config.SourceGVK, err)
 	}
 
-	dynamicController := &DynamicController{
-		Name:    controllerName,
-		Context: dynCtx,
-		Cancel:  dynCancel,
-		Manager: dynamicMgr,
-		Started: false,
-	}
+	informer := r.informerFactory.ForResource(mapping.Resource).Informer()
 
-	r.activeControllers[controllerName] = dynamicController
+	rateLimiter := workqueue.DefaultTypedControllerRateLimiter[reconcile.Request]()
+	queue := workqueue.NewTypedRateLimitingQueueWithConfig(rateLimiter, workqueue.TypedRateLimitingQueueConfig[reconcile.Request]{
+		Name: fmt.Sprintf("syncer-%s", ruleKey.String()),
+	})
+	config.Workqueue = queue
 
-	// Create the reconciler
+	// The reconciler logic
 	dynamicSyncer := &DynamicResourceSyncer{
-		Client: dynamicMgr.GetClient(),
+		Client: r.Client,
 		Scheme: r.Scheme,
 		Config: config,
 	}
 
-	logger.Info("Creating dynamic controller", "controllerName", controllerName)
+	// Create a cancellable context for the informer and worker goroutine
+	controllerCtx, cancelFunc := context.WithCancel(parentCtx)
 
-	// Create the unstructured object with the correct GVK for watching
-	watchObject := &unstructured.Unstructured{}
-	watchObject.SetGroupVersionKind(config.SourceGVK)
+	// // Get an informer for the specific GVK from the manager's cache
+	// informer, err := r.Manager.GetCache().GetInformerForKind(controllerCtx, config.SourceGVK)
+	// if err != nil {
+	// 	cancelFunc() // clean up context if we fail
+	// 	return fmt.Errorf("failed to get informer for GVK %v: %w", config.SourceGVK, err)
+	// }
 
-	// Set up the controller with the new manager
-	err = ctrl.NewControllerManagedBy(dynamicMgr).
-		// very important!
-		// By default, controllers are named using the lowercase version of their kind.
-		// we need to have a unique name
-		Named(controllerName).
-		For(watchObject).
-		Complete(dynamicSyncer)
-
+	logger.Info("Setting up event handler for dynamic watcher.")
+	// Add an event handler that simply adds the object's key to our new workqueue
+	handlerRegistration, err := informer.AddEventHandler(gocache.ResourceEventHandlerFuncs{
+		AddFunc:    func(obj any) { queue.Add(reconcile.Request{NamespacedName: objectToKey(obj)}) },
+		UpdateFunc: func(oldObj, newObj any) { queue.Add(reconcile.Request{NamespacedName: objectToKey(newObj)}) },
+		DeleteFunc: func(obj any) { queue.Add(reconcile.Request{NamespacedName: objectToKey(obj)}) },
+	})
 	if err != nil {
-		r.cleanupController(controllerName, dynamicController)
-		return fmt.Errorf("failed to create controller: %w", err)
+		cancelFunc() // clean up context if we fail
+		return fmt.Errorf("failed to add event handler: %w", err)
 	}
+
+	// Store the cancel function so we can stop this later
+	r.activeControllersMu.Lock()
+	r.activeControllers[ruleKey] = cancelFunc
+	r.activeControllersMu.Unlock()
+
+	// Start a worker goroutine that processes items from the workqueue
+	logger.Info("Starting worker goroutine for dynamic watcher.")
 
 	go func() {
 		defer func() {
-			r.activeControllersMu.Lock()
-			r.cleanupController(controllerName, dynamicController)
-			r.activeControllersMu.Unlock()
+			cancelFunc()
+
+			if err := informer.RemoveEventHandler(handlerRegistration); err != nil {
+				logger.Error(err, "Failed to remove event handler from informer")
+			}
+
+			queue.ShutDown()
+			logger.Info("Worker goroutine has stopped and cleaned up.")
 		}()
 
-		// Mark as started
-		dynamicController.mutex.Lock()
-		dynamicController.Started = true
-		dynamicController.mutex.Unlock()
-
-		if err := dynamicMgr.Start(dynCtx); err != nil {
-			if !errors.Is(err, context.Canceled) {
-				logger.Error(err, "Dynamic controller manager returned an error", "controllerName", controllerName)
-			}
+		// Wait until the informer's cache is synced before starting to process items.
+		// This prevents the worker from processing items before the cache is ready.
+		if !gocache.WaitForCacheSync(parentCtx.Done(), informer.HasSynced) {
+			logger.Error(nil, "Timed out waiting for informer cache to sync")
+			return
 		}
 
-		logger.Info("Stopped dynamic controller manager", "controllerName", controllerName)
+		logger.Info("Informer cache synced. Worker is starting.")
+
+		// This is the standard worker loop pattern
+		for dynamicSyncer.processNextWorkItem(controllerCtx, logger) {
+		}
+
+		logger.Info("Worker goroutine has stopped.")
 	}()
 
 	return nil
 }
 
-func (r *SyncRuleReconciler) cleanupController(name string, controller *DynamicController) {
-	log.Log.Info("Cleaning up controller", "controllerName", name, "cancelFunc", controller.Cancel)
-
-	if controller.Cancel != nil {
-		controller.Cancel()
+// objectToKey is a helper to get the key from an object in the informer
+func objectToKey(obj any) types.NamespacedName {
+	metaObj, ok := obj.(metav1.Object)
+	if !ok {
+		tombstone, ok := obj.(gocache.DeletedFinalStateUnknown)
+		if !ok {
+			log.Log.Error(nil, "error decoding object, invalid type")
+			return types.NamespacedName{}
+		}
+		metaObj, ok = tombstone.Obj.(metav1.Object)
+		if !ok {
+			log.Log.Error(nil, "error decoding object tombstone, invalid type")
+			return types.NamespacedName{}
+		}
 	}
+	return types.NamespacedName{Name: metaObj.GetName(), Namespace: metaObj.GetNamespace()}
+}
 
-	delete(r.activeControllers, name)
+func (r *SyncRuleReconciler) stopDynamicController(ruleKey types.NamespacedName) {
+	r.activeControllersMu.Lock()
+	defer r.activeControllersMu.Unlock()
 
-	// Give some time for graceful shutdown
-	time.Sleep(2 * time.Second)
+	if cancel, exists := r.activeControllers[ruleKey]; exists {
+		log.Log.Info("Stopping dynamic controller for rule", "syncrule", ruleKey)
+		cancel()
+		delete(r.activeControllers, ruleKey)
+	}
 }
