@@ -44,12 +44,12 @@ var _ = When("hydrophone", Label("hydrophone"), func() {
 				Namespace: namespace,
 			},
 			Spec: v1alpha1.ClusterSpec{
-				ServerArgs: []string{
-					"--kube-apiserver-arg", "feature-gates=kube:DynamicResourceAllocation=true",
-				},
 				TLSSANs: []string{containerIP},
 				Expose: &v1alpha1.ExposeConfig{
 					NodePort: &v1alpha1.NodePortConfig{},
+				},
+				Persistence: v1alpha1.PersistenceConfig{
+					Type: v1alpha1.EphemeralPersistenceMode,
 				},
 			},
 		}
