@@ -82,10 +82,15 @@ var _ = When("hydrophone", Label("hydrophone"), func() {
 		ctx, cancel := context.WithTimeout(ctx, time.Minute*15)
 		defer cancel()
 
-		focus := fmt.Sprintf(`"%s.*\[Conformance\]"`, os.Getenv("FOCUS"))
-		fmt.Fprintf(GinkgoWriter, "Got focus: %s\n", focus)
+		args := []string{"--kubeconfig", tempfile}
 
-		args := []string{"--focus", focus, "--kubeconfig", tempfile}
+		focus := os.Getenv("FOCUS")
+		if focus != "" {
+			args = append(args, "--focus", focus)
+		} else {
+			args = append(args, "--conformance")
+		}
+
 		cmd := exec.CommandContext(ctx, "hydrophone", args...)
 
 		fmt.Fprintf(GinkgoWriter, "Running hydrophone tests... [args=%s]\n", strings.Join(args, " "))
