@@ -85,7 +85,7 @@ var _ = When("hydrophone", Label("hydrophone"), func() {
 		focus := os.Getenv("FOCUS")
 		fmt.Fprintf(GinkgoWriter, "Got focus: %s\n", focus)
 
-		args := []string{"--focus", `.*\[Conformance\]`, "--kubeconfig", tempfile}
+		args := []string{"--focus", `"\[Conformance\]"`, "--kubeconfig", tempfile}
 		cmd := exec.CommandContext(ctx, "hydrophone", args...)
 
 		fmt.Fprintf(GinkgoWriter, "Running hydrophone tests... [args=%s]\n", strings.Join(args, " "))
