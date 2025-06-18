@@ -11,6 +11,10 @@ permissions:
 jobs:
   conformance:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        focus:
+        - '\[sig-apps\]'
 
     steps:
     - name: Checkout code
@@ -43,7 +47,7 @@ jobs:
     - name: Run tests
       run: make test-conformance
       env:
-        FOCUS: "FOCUS_TEST"
+        FOCUS: ${{ matrix.focus }}
 
 # [k8s.io]
 # [sig-api-machinery]
