@@ -1,0 +1,65 @@
+name: Conformance Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+    contents: read
+
+jobs:
+  conformance:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        fetch-tags: true
+
+    - uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+    
+    - name: Validate
+      run: make validate
+
+    - name: Install hydrophone
+      run: go install sigs.k8s.io/hydrophone@latest
+    
+    - name: Build and package
+      run: |
+        make build
+        make package
+
+        # add k3kcli to $PATH
+        echo "${{ github.workspace }}/bin" >> $GITHUB_PATH
+
+    - name: Check k3kcli
+      run: k3kcli -v
+
+    - name: Run tests
+      run: make test-conformance
+      env:
+        FOCUS: "FOCUS_TEST"
+
+# [k8s.io]
+# [sig-api-machinery]
+# [sig-apps]
+# [sig-architecture]
+# [sig-auth]
+# [sig-cli]
+# [sig-instrumentation]
+# [sig-network]
+# [sig-node]
+# [sig-scheduling]
+# [sig-storage]
+
+    - name: Archive k3s logs
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: k3s-logs
+        path: /tmp/k3s-conformance.log
