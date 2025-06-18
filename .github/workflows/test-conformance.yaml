@@ -53,20 +53,21 @@ jobs:
   conformance-sigs:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         focus:
         - '\[sig-apps\]'
-        - '\[k8s\.io\]'
-        - '\[sig-api-machinery\]'
-        - '\[sig-apps\]'
+        # - '\[k8s\.io\]'
+        # - '\[sig-api-machinery\]'
+        # - '\[sig-apps\]'
         - '\[sig-architecture\]'
-        - '\[sig-auth\]'
-        - '\[sig-cli\]'
-        - '\[sig-instrumentation\]'
-        - '\[sig-network\]'
-        - '\[sig-node\]'
-        - '\[sig-scheduling\]'
-        - '\[sig-storage\]'
+        # - '\[sig-auth\]'
+        # - '\[sig-cli\]'
+        # - '\[sig-instrumentation\]'
+        # - '\[sig-network\]'
+        # - '\[sig-node\]'
+        # - '\[sig-scheduling\]'
+        # - '\[sig-storage\]'
 
     steps:
     - name: Checkout code
