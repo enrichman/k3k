@@ -73,27 +73,27 @@ jobs:
       matrix:
         tests:
           - name: k8s-io
-            focus: '\[k8s\.io\]'
+            focus: '\[k8s\.io\].*\[Conformance\]'
           - name: sig-api-machinery
-            focus: '\[sig-api-machinery\]'
+            focus: '\[sig-api-machinery\].*\[Conformance\]'
           - name: sig-apps
-            focus: '\[sig-apps\]'
+            focus: '\[sig-apps\].*\[Conformance\]'
           - name: sig-architecture
-            focus: '\[sig-architecture\]'
+            focus: '\[sig-architecture\].*\[Conformance\]'
           - name: sig-auth
-            focus: '\[sig-auth\]'
+            focus: '\[sig-auth\].*\[Conformance\]'
           - name: sig-cli
-            focus: '\[sig-cli\]'
+            focus: '\[sig-cli\].*\[Conformance\]'
           - name: sig-instrumentation
-            focus: '\[sig-instrumentation\]'
+            focus: '\[sig-instrumentation\].*\[Conformance\]'
           - name: sig-network
-            focus: '\[sig-network\]'
+            focus: '\[sig-network\].*\[Conformance\]'
           - name: sig-node
-            focus: '\[sig-node\]'
+            focus: '\[sig-node\].*\[Conformance\]'
           - name: sig-scheduling
-            focus: '\[sig-scheduling\]'
+            focus: '\[sig-scheduling\].*\[Conformance\]'
           - name: sig-storage
-            focus: '\[sig-storage\]'
+            focus: '\[sig-storage\].*\[Conformance\]'
 
     steps:
     - name: Checkout code
