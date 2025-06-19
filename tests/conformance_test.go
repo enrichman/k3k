@@ -82,7 +82,8 @@ var _ = When("hydrophone", Label("hydrophone"), func() {
 		ctx, cancel := context.WithTimeout(ctx, time.Minute*15)
 		defer cancel()
 
-		logsDir, err := os.MkdirTemp("", os.Getenv("LOG_TMP_DIR"))
+		logsDir := path.Join(os.TempDir(), os.Getenv("LOG_TMP_DIR"))
+		err = os.MkdirAll(logsDir, os.ModePerm)
 		Expect(err).To(Not(HaveOccurred()))
 
 		args := []string{"-v", "6", "--kubeconfig", tempfile, "--output-dir", logsDir}
