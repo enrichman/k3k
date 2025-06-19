@@ -42,13 +42,15 @@ jobs:
 
     - name: Run tests
       run: make test-conformance
+      env:
+        LOG_TMP_DIR: conformance-logs
 
     - name: Archive k3s logs
       uses: actions/upload-artifact@v4
       if: always()
       with:
         name: k3s-logs
-        path: /tmp/k3s-conformance.log
+        path: /tmp/conformance-logs/e2e.log
 
   conformance-sigs:
     runs-on: ubuntu-latest
@@ -101,10 +103,12 @@ jobs:
       run: make test-conformance
       env:
         FOCUS: ${{ matrix.focus }}
+        LOG_TMP_DIR: conformance-sigs-logs
+
 
     - name: Archive k3s logs
       uses: actions/upload-artifact@v4
       if: always()
       with:
         name: k3s-logs
-        path: /tmp/k3s-conformance.log
+        path: /tmp/conformance-sigs-logs/e2e.log
