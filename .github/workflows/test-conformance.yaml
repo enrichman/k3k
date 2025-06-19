@@ -43,7 +43,7 @@ jobs:
     - name: Run tests
       run: make test-conformance
       env:
-        LOG_TMP_DIR: conformance-logs
+        LOG_DIR: conformance-logs
 
     - name: Archive k3s logs
       uses: actions/upload-artifact@v4
@@ -59,14 +59,14 @@ jobs:
         name: conformance-k3k-logs
         path: /tmp/k3k.log
 
-    - name: Archive k3s logs
+    - name: Archive hydrophone logs
       uses: actions/upload-artifact@v4
       if: always()
       with:
         name: conformance-logs
         path: /tmp/conformance-logs/e2e.log
 
-  conformance-sigs:
+  sigs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -133,19 +133,19 @@ jobs:
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: conformance-${{ matrix.tests.name }}-k3s-logs
+        name: ${{ matrix.tests.name }}-k3s-logs
         path: /tmp/k3s.log
     
     - name: Archive k3k logs
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: conformance-${{ matrix.tests.name }}-k3k-logs
+        name: ${{ matrix.tests.name }}-k3k-logs
         path: /tmp/k3k.log
 
-    - name: Archive k3s logs
+    - name: Archive hydrophone logs
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: conformance-${{ matrix.tests.name }}-logs
+        name: ${{ matrix.tests.name }}-logs
         path: /tmp/${{ matrix.tests.name }}/e2e.log
