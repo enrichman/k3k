@@ -82,7 +82,7 @@ var _ = When("hydrophone", Label("hydrophone"), func() {
 		ctx, cancel := context.WithTimeout(ctx, time.Minute*15)
 		defer cancel()
 
-		logsDir := path.Join(os.TempDir(), os.Getenv("LOG_TMP_DIR"))
+		logsDir := path.Join(os.TempDir(), os.Getenv("LOG_DIR"))
 		err = os.MkdirAll(logsDir, os.ModePerm)
 		Expect(err).To(Not(HaveOccurred()))
 

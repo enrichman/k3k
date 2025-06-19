@@ -49,7 +49,21 @@ jobs:
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: k3s-logs
+        name: conformance-k3s-logs
+        path: /tmp/k3s.log
+    
+    - name: Archive k3k logs
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: conformance-k3k-logs
+        path: /tmp/k3k.log
+
+    - name: Archive k3s logs
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: conformance-logs
         path: /tmp/conformance-logs/e2e.log
 
   conformance-sigs:
@@ -57,19 +71,29 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        focus:
-        - '\[sig-apps\]'
-        # - '\[k8s\.io\]'
-        # - '\[sig-api-machinery\]'
-        # - '\[sig-apps\]'
-        - '\[sig-architecture\]'
-        # - '\[sig-auth\]'
-        # - '\[sig-cli\]'
-        # - '\[sig-instrumentation\]'
-        # - '\[sig-network\]'
-        # - '\[sig-node\]'
-        # - '\[sig-scheduling\]'
-        # - '\[sig-storage\]'
+        tests:
+          - name: k8s-io
+            focus: '\[k8s\.io\]'
+          - name: sig-api-machinery
+            focus: '\[sig-api-machinery\]'
+          - name: sig-apps
+            focus: '\[sig-apps\]'
+          - name: sig-architecture
+            focus: '\[sig-architecture\]'
+          - name: sig-auth
+            focus: '\[sig-auth\]'
+          - name: sig-cli
+            focus: '\[sig-cli\]'
+          - name: sig-instrumentation
+            focus: '\[sig-instrumentation\]'
+          - name: sig-network
+            focus: '\[sig-network\]'
+          - name: sig-node
+            focus: '\[sig-node\]'
+          - name: sig-scheduling
+            focus: '\[sig-scheduling\]'
+          - name: sig-storage
+            focus: '\[sig-storage\]'
 
     steps:
     - name: Checkout code
@@ -102,13 +126,26 @@ jobs:
     - name: Run tests
       run: make test-conformance
       env:
-        FOCUS: ${{ matrix.focus }}
-        LOG_TMP_DIR: conformance-sigs-logs
-
+        FOCUS: ${{ matrix.tests.focus }}
+        LOG_DIR: ${{ matrix.tests.name }}
 
     - name: Archive k3s logs
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: k3s-logs
-        path: /tmp/conformance-sigs-logs/e2e.log
+        name: conformance-${{ matrix.tests.name }}-k3s-logs
+        path: /tmp/k3s.log
+    
+    - name: Archive k3k logs
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: conformance-${{ matrix.tests.name }}-k3k-logs
+        path: /tmp/k3k.log
+
+    - name: Archive k3s logs
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: conformance-${{ matrix.tests.name }}-logs
+        path: /tmp/${{ matrix.tests.name }}/e2e.log

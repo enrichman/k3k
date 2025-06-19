@@ -173,22 +173,8 @@ var _ = AfterSuite(func() {
 	readCloser, err := k3sContainer.Logs(context.Background())
 	Expect(err).To(Not(HaveOccurred()))
 
-	logs, err := io.ReadAll(readCloser)
-	Expect(err).To(Not(HaveOccurred()))
-
-	logfile := path.Join(os.TempDir(), "k3s.log")
-	err = os.WriteFile(logfile, logs, 0644)
-	Expect(err).To(Not(HaveOccurred()))
-
-	fmt.Fprintln(GinkgoWriter, "k3s logs written to: "+logfile)
-
-	// dump k3k controller logs
-	readCloser, err = k3sContainer.Logs(context.Background())
-	Expect(err).To(Not(HaveOccurred()))
 	writeLogs("k3s.log", readCloser)
-
-	// dump k3k logs
-	writeK3kLogs()
+	writeK3kLogs("k3k.log")
 
 	testcontainers.CleanupContainer(GinkgoTB(), k3sContainer)
 })
@@ -204,7 +190,7 @@ func buildScheme() *runtime.Scheme {
 	return scheme
 }
 
-func writeK3kLogs() {
+func writeK3kLogs(filename string) {
 	var (
 		err     error
 		podList v1.PodList
@@ -218,10 +204,12 @@ func writeK3kLogs() {
 	req := k8s.CoreV1().Pods(k3kPod.Namespace).GetLogs(k3kPod.Name, &corev1.PodLogOptions{})
 	podLogs, err := req.Stream(ctx)
 	Expect(err).To(Not(HaveOccurred()))
-	writeLogs("k3k.log", podLogs)
+	writeLogs(filename, podLogs)
 }
 
 func writeLogs(filename string, logs io.ReadCloser) {
+	GinkgoHelper()
+
 	defer logs.Close()
 
 	logsStr, err := io.ReadAll(logs)
