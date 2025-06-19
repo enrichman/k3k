@@ -34,27 +34,69 @@ func TestTests(t *testing.T) {
 }
 
 var (
-	k3sContainer *k3s.K3sContainer
-	hostIP       string
-	k8s          *kubernetes.Clientset
-	k8sClient    client.Client
+	k3sContainer  *k3s.K3sContainer
+	k3sContainer2 *k3s.K3sContainer
+	hostIP        string
+	k8s           *kubernetes.Clientset
+	k8sClient     client.Client
 )
+
+type k3sCustomizer struct {
+	server string
+	token  string
+}
+
+func (c *k3sCustomizer) Customize(req *testcontainers.GenericContainerRequest) error {
+	if c.server != "" {
+		req.Cmd = append(req.Cmd, "--server", fmt.Sprintf("https://%s:6443", c.server))
+	} else {
+		req.Cmd = append(req.Cmd, "--cluster-init")
+	}
+
+	if req.Env == nil {
+		req.Env = map[string]string{}
+	}
+
+	req.Env["K3S_TOKEN"] = c.token
+
+	return nil
+}
 
 var _ = BeforeSuite(func() {
 	var err error
 	ctx := context.Background()
 
-	k3sContainer, err = k3s.Run(ctx, "rancher/k3s:v1.32.1-k3s1")
+	k3sContainer, err = k3s.Run(ctx, "rancher/k3s:v1.32.1-k3s1", &k3sCustomizer{
+		token: "k3srandomtoken",
+	})
 	Expect(err).To(Not(HaveOccurred()))
 
 	hostIP, err = k3sContainer.ContainerIP(ctx)
 	Expect(err).To(Not(HaveOccurred()))
 	fmt.Fprintln(GinkgoWriter, "K3s containerIP: "+hostIP)
 
+	// second node
+	k3sContainer2, err = k3s.Run(ctx, "rancher/k3s:v1.32.1-k3s1", &k3sCustomizer{
+		token:  "k3srandomtoken",
+		server: hostIP,
+	})
+	Expect(err).To(Not(HaveOccurred()))
+
+	hostIP2, err := k3sContainer2.ContainerIP(ctx)
+	Expect(err).To(Not(HaveOccurred()))
+	fmt.Fprintln(GinkgoWriter, "K3s containerIP2: "+hostIP2)
+	// end
+
 	kubeconfig, err := k3sContainer.GetKubeConfig(context.Background())
 	Expect(err).To(Not(HaveOccurred()))
 
 	initKubernetesClient(kubeconfig)
+
+	var nodes v1.NodeList
+	err = k8sClient.List(ctx, &nodes)
+	Expect(err).To(Not(HaveOccurred()))
+	fmt.Fprintf(GinkgoWriter, "Found %d nodes\n", len(nodes.Items))
+
 	installK3kChart(kubeconfig)
 })
 
@@ -116,6 +158,8 @@ func installK3kChart(kubeconfig []byte) {
 	})
 
 	err = k3sContainer.LoadImages(context.Background(), "rancher/k3k:dev", "rancher/k3k-kubelet:dev")
+	Expect(err).To(Not(HaveOccurred()))
+	err = k3sContainer2.LoadImages(context.Background(), "rancher/k3k:dev", "rancher/k3k-kubelet:dev")
 	Expect(err).To(Not(HaveOccurred()))
 
 	release, err := iCli.Run(k3kChart, k3kChart.Values)
