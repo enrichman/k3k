@@ -82,9 +82,13 @@ var _ = When("hydrophone", Label("hydrophone"), func() {
 		ctx, cancel := context.WithTimeout(ctx, time.Minute*15)
 		defer cancel()
 
-		args := []string{"--kubeconfig", tempfile}
+		logsDir, err := os.MkdirTemp("", os.Getenv("LOG_TMP_DIR"))
+		Expect(err).To(Not(HaveOccurred()))
+
+		args := []string{"-v", "6", "--kubeconfig", tempfile, "--output-dir", logsDir}
 
 		focus := os.Getenv("FOCUS")
+		focus = "should rollback without unnecessary restarts"
 		if focus != "" {
 			args = append(args, "--focus", focus)
 		} else {
