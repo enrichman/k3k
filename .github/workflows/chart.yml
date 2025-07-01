@@ -16,6 +16,8 @@ permissions:
 jobs:
   chart-release:
     runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.tag != '')
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
