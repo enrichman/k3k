@@ -1,14 +1,10 @@
-name: Chart
+name: Release Chart
 
 on:
   push:
     tags:
     - "v*"
   workflow_dispatch:
-    inputs:
-      tag:
-        type: string
-        description: Release Chart with a specific tag or commit
 
 permissions:
     contents: write
@@ -16,7 +12,6 @@ permissions:
 jobs:
   chart-release:
     runs-on: ubuntu-latest
-    if: github.event_name != 'workflow_dispatch' || inputs.tag != ''
 
     steps:
     - name: Checkout code
@@ -29,22 +24,11 @@ jobs:
       run: |
         git config user.name "$GITHUB_ACTOR"
         git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
-    
-    - name: Checkout code at the specific tag or commit
-      if: inputs.tag != ''
-      run: git checkout ${{ inputs.tag }}
 
     - name: Install Helm
       uses: azure/setup-helm@v4
       env:
         GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
-
-    - name: Update Chart.yaml
-      run: |
-        TAG=$(git describe --tag --always --match="v[0-9]*")
-
-        sed -e "s#v0.0.0#$TAG#g" charts/k3k/Chart.yaml.tmpl > charts/k3k/Chart.yaml
-        cat charts/k3k/Chart.yaml
 
     - name: Run chart-releaser
       uses: helm/chart-releaser-action@v1.6.0
