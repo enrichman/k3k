@@ -8,7 +8,7 @@ on:
     inputs:
       tag:
         type: string
-        description: Release Chart with a specific tag
+        description: Release Chart with a specific tag or commit
 
 permissions:
     contents: write
@@ -16,19 +16,24 @@ permissions:
 jobs:
   chart-release:
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.tag != '')
+    if: github.event_name != 'workflow_dispatch' || inputs.tag != ''
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
           fetch-depth: 0
+          fetch-tags: true
 
     - name: Configure Git
       run: |
         git config user.name "$GITHUB_ACTOR"
         git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
     
+    - name: Checkout code at the specific tag or commit
+      if: inputs.tag != ''
+      run: git checkout ${{ inputs.tag }}
+
     - name: Install Helm
       uses: azure/setup-helm@v4
       env:
@@ -36,10 +41,7 @@ jobs:
 
     - name: Update Chart.yaml
       run: |
-        TAG=${{  github.ref_name }}
-        if [ -n "${{  inputs.tag }}" ]; then
-          TAG="${{  inputs.tag }}"
-        fi
+        TAG=$(git describe --tag --always --match="v[0-9]*")
 
         sed -e "s#v0.0.0#$TAG#g" charts/k3k/Chart.yaml.tmpl > charts/k3k/Chart.yaml
         cat charts/k3k/Chart.yaml
