@@ -11,7 +11,7 @@ import (
 	k3kcluster "github.com/rancher/k3k/pkg/controller/cluster"
 	"github.com/rancher/k3k/pkg/controller/kubeconfig"
 	"github.com/sirupsen/logrus"
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v3"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -27,10 +27,10 @@ type CreateConfig struct {
 	serviceCIDR          string
 	servers              int
 	agents               int
-	serverArgs           cli.StringSlice
-	agentArgs            cli.StringSlice
-	serverEnvs           cli.StringSlice
-	agentEnvs            cli.StringSlice
+	serverArgs           []string
+	agentArgs            []string
+	serverEnvs           []string
+	agentEnvs            []string
 	persistenceType      string
 	storageClassName     string
 	storageRequestSize   string
@@ -59,15 +59,14 @@ func NewClusterCreateCmd(appCtx *AppContext) *cli.Command {
 }
 
 func createAction(appCtx *AppContext, config *CreateConfig) cli.ActionFunc {
-	return func(clx *cli.Context) error {
-		ctx := context.Background()
+	return func(ctx context.Context, cmd *cli.Command) error {
 		client := appCtx.Client
 
-		if clx.NArg() != 1 {
-			return cli.ShowSubcommandHelp(clx)
+		if cmd.NArg() != 1 {
+			return cli.ShowSubcommandHelp(cmd)
 		}
 
-		name := clx.Args().First()
+		name := cmd.Args().First()
 		if name == k3kcluster.ClusterInvalidName {
 			return errors.New("invalid cluster name")
 		}
@@ -168,10 +167,10 @@ func newCluster(name, namespace string, config *CreateConfig) *v1alpha1.Cluster 
 			Agents:      ptr.To(int32(config.agents)),
 			ClusterCIDR: config.clusterCIDR,
 			ServiceCIDR: config.serviceCIDR,
-			ServerArgs:  config.serverArgs.Value(),
-			AgentArgs:   config.agentArgs.Value(),
-			ServerEnvs:  env(config.serverEnvs.Value()),
-			AgentEnvs:   env(config.agentEnvs.Value()),
+			ServerArgs:  config.serverArgs,
+			AgentArgs:   config.agentArgs,
+			ServerEnvs:  env(config.serverEnvs),
+			AgentEnvs:   env(config.agentEnvs),
 			Version:     config.version,
 			Mode:        v1alpha1.ClusterMode(config.mode),
 			Persistence: v1alpha1.PersistenceConfig{

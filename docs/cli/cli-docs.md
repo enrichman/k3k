@@ -14,14 +14,14 @@ k3kcli
 **Usage**:
 
 ```
-k3kcli [GLOBAL OPTIONS] command [COMMAND OPTIONS] [ARGUMENTS...]
+k3kcli [GLOBAL OPTIONS] [command [COMMAND OPTIONS]] [ARGUMENTS...]
 ```
 
 # GLOBAL OPTIONS
 
 **--debug**: Turn on debug logs
 
-**--kubeconfig**="": kubeconfig path (default: $HOME/.kube/config or $KUBECONFIG if set)
+**--kubeconfig**="": kubeconfig path
 
 
 # COMMANDS
@@ -36,9 +36,9 @@ Create new cluster
 
 >k3kcli cluster create [command options] NAME
 
-**--agent-args**="": agents extra arguments
+**--agent-args**="": agents extra arguments (default: [])
 
-**--agent-envs**="": agents extra Envs
+**--agent-envs**="": agents extra Envs (default: [])
 
 **--agents**="": number of agents (default: 0)
 
@@ -46,23 +46,23 @@ Create new cluster
 
 **--debug**: Turn on debug logs
 
-**--kubeconfig**="": kubeconfig path (default: $HOME/.kube/config or $KUBECONFIG if set)
+**--kubeconfig**="": kubeconfig path
 
 **--kubeconfig-server**="": override the kubeconfig server host
 
 **--mirror-host-nodes**: Mirror Host Cluster Nodes
 
-**--mode**="": k3k mode type (shared, virtual) (default: "shared")
+**--mode**="": k3k mode type (shared, virtual) (default: shared)
 
 **--namespace, -n**="": namespace of the k3k cluster
 
-**--persistence-type**="": persistence mode for the nodes (dynamic, ephemeral, static) (default: "dynamic")
+**--persistence-type**="": persistence mode for the nodes (dynamic, ephemeral, static) (default: dynamic)
 
 **--policy**="": The policy to create the cluster in
 
-**--server-args**="": servers extra arguments
+**--server-args**="": servers extra arguments (default: [])
 
-**--server-envs**="": servers extra Envs
+**--server-envs**="": servers extra Envs (default: [])
 
 **--servers**="": number of servers (default: 1)
 
@@ -86,7 +86,7 @@ Delete an existing cluster
 
 **--keep-data**: keeps persistence volumes created for the cluster after deletion
 
-**--kubeconfig**="": kubeconfig path (default: $HOME/.kube/config or $KUBECONFIG if set)
+**--kubeconfig**="": kubeconfig path
 
 **--namespace, -n**="": namespace of the k3k cluster
 
@@ -98,7 +98,7 @@ List all the existing cluster
 
 **--debug**: Turn on debug logs
 
-**--kubeconfig**="": kubeconfig path (default: $HOME/.kube/config or $KUBECONFIG if set)
+**--kubeconfig**="": kubeconfig path
 
 **--namespace, -n**="": namespace of the k3k cluster
 
@@ -114,9 +114,9 @@ Create new policy
 
 **--debug**: Turn on debug logs
 
-**--kubeconfig**="": kubeconfig path (default: $HOME/.kube/config or $KUBECONFIG if set)
+**--kubeconfig**="": kubeconfig path
 
-**--mode**="": The allowed mode type of the policy (default: "shared")
+**--mode**="": The allowed mode type of the policy (default: shared)
 
 ### delete
 
@@ -126,7 +126,7 @@ Delete an existing policy
 
 **--debug**: Turn on debug logs
 
-**--kubeconfig**="": kubeconfig path (default: $HOME/.kube/config or $KUBECONFIG if set)
+**--kubeconfig**="": kubeconfig path
 
 ### list
 
@@ -136,7 +136,7 @@ List all the existing policies
 
 **--debug**: Turn on debug logs
 
-**--kubeconfig**="": kubeconfig path (default: $HOME/.kube/config or $KUBECONFIG if set)
+**--kubeconfig**="": kubeconfig path
 
 ## kubeconfig
 
@@ -146,9 +146,9 @@ Manage kubeconfig for clusters
 
 Generate kubeconfig for clusters
 
-**--altNames**="": altNames of the generated certificates for the kubeconfig
+**--altNames**="": altNames of the generated certificates for the kubeconfig (default: [])
 
-**--cn**="": Common name (CN) of the generated certificates for the kubeconfig (default: "system:admin")
+**--cn**="": Common name (CN) of the generated certificates for the kubeconfig (default: system:admin)
 
 **--config-name**="": the name of the generated kubeconfig file
 
@@ -156,7 +156,7 @@ Generate kubeconfig for clusters
 
 **--expiration-days**="": Expiration date of the certificates used for the kubeconfig (default: 356)
 
-**--kubeconfig**="": kubeconfig path (default: $HOME/.kube/config or $KUBECONFIG if set)
+**--kubeconfig**="": kubeconfig path
 
 **--kubeconfig-server**="": override the kubeconfig server host
 
@@ -164,4 +164,4 @@ Generate kubeconfig for clusters
 
 **--namespace, -n**="": namespace of the k3k cluster
 
-**--org**="": Organization name (ORG) of the generated certificates for the kubeconfig
+**--org**="": Organization name (ORG) of the generated certificates for the kubeconfig (default: [])

@@ -1,12 +1,12 @@
 package cmds
 
 import (
-	"fmt"
+	"context"
 
 	"github.com/rancher/k3k/pkg/apis/k3k.io/v1alpha1"
 	"github.com/rancher/k3k/pkg/buildinfo"
 	"github.com/sirupsen/logrus"
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v3"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -25,49 +25,45 @@ type AppContext struct {
 	namespace  string
 }
 
-func NewApp() *cli.App {
+func NewApp() *cli.Command {
 	appCtx := &AppContext{}
 
-	app := cli.NewApp()
-	app.Name = "k3kcli"
-	app.Usage = "CLI for K3K"
-	app.Flags = CommonFlags(appCtx)
+	app := &cli.Command{
+		EnableShellCompletion: true,
+		Name:                  "k3kcli",
+		Usage:                 "CLI for K3K",
+		Version:               buildinfo.Version,
+		Flags:                 CommonFlags(appCtx),
+		Before: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
+			if appCtx.Debug {
+				logrus.SetLevel(logrus.DebugLevel)
+			}
 
-	app.Before = func(clx *cli.Context) error {
-		if appCtx.Debug {
-			logrus.SetLevel(logrus.DebugLevel)
-		}
+			restConfig, err := loadRESTConfig(appCtx.Kubeconfig)
+			if err != nil {
+				return ctx, err
+			}
 
-		restConfig, err := loadRESTConfig(appCtx.Kubeconfig)
-		if err != nil {
-			return err
-		}
+			scheme := runtime.NewScheme()
+			_ = clientgoscheme.AddToScheme(scheme)
+			_ = v1alpha1.AddToScheme(scheme)
+			_ = apiextensionsv1.AddToScheme(scheme)
 
-		scheme := runtime.NewScheme()
-		_ = clientgoscheme.AddToScheme(scheme)
-		_ = v1alpha1.AddToScheme(scheme)
-		_ = apiextensionsv1.AddToScheme(scheme)
+			ctrlClient, err := client.New(restConfig, client.Options{Scheme: scheme})
+			if err != nil {
+				return ctx, err
+			}
 
-		ctrlClient, err := client.New(restConfig, client.Options{Scheme: scheme})
-		if err != nil {
-			return err
-		}
+			appCtx.RestConfig = restConfig
+			appCtx.Client = ctrlClient
 
-		appCtx.RestConfig = restConfig
-		appCtx.Client = ctrlClient
-
-		return nil
-	}
-
-	app.Version = buildinfo.Version
-	cli.VersionPrinter = func(cCtx *cli.Context) {
-		fmt.Println("k3kcli Version: " + buildinfo.Version)
-	}
-
-	app.Commands = []*cli.Command{
-		NewClusterCmd(appCtx),
-		NewPolicyCmd(appCtx),
-		NewKubeconfigCmd(appCtx),
+			return ctx, nil
+		},
+		Commands: []*cli.Command{
+			NewClusterCmd(appCtx),
+			NewPolicyCmd(appCtx),
+			NewKubeconfigCmd(appCtx),
+		},
 	}
 
 	return app
@@ -106,7 +102,7 @@ func FlagDebug(appCtx *AppContext) *cli.BoolFlag {
 		Name:        "debug",
 		Usage:       "Turn on debug logs",
 		Destination: &appCtx.Debug,
-		EnvVars:     []string{"K3K_DEBUG"},
+		Sources:     cli.EnvVars("K3K_DEBUG"),
 	}
 }
 

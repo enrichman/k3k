@@ -7,7 +7,7 @@ import (
 	"github.com/rancher/k3k/pkg/apis/k3k.io/v1alpha1"
 	"github.com/rancher/k3k/pkg/controller/policy"
 	"github.com/sirupsen/logrus"
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v3"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,7 +29,7 @@ func NewPolicyCreateCmd(appCtx *AppContext) *cli.Command {
 			Usage:       "The allowed mode type of the policy",
 			Destination: &config.mode,
 			Value:       "shared",
-			Action: func(ctx *cli.Context, value string) error {
+			Action: func(ctx context.Context, cmd *cli.Command, value string) error {
 				switch value {
 				case string(v1alpha1.VirtualClusterMode), string(v1alpha1.SharedClusterMode):
 					return nil
@@ -51,15 +51,14 @@ func NewPolicyCreateCmd(appCtx *AppContext) *cli.Command {
 }
 
 func policyCreateAction(appCtx *AppContext, config *VirtualClusterPolicyCreateConfig) cli.ActionFunc {
-	return func(clx *cli.Context) error {
-		ctx := context.Background()
+	return func(ctx context.Context, cmd *cli.Command) error {
 		client := appCtx.Client
 
-		if clx.NArg() != 1 {
-			return cli.ShowSubcommandHelp(clx)
+		if cmd.NArg() != 1 {
+			return cli.ShowSubcommandHelp(cmd)
 		}
 
-		policyName := clx.Args().First()
+		policyName := cmd.Args().First()
 
 		_, err := createPolicy(ctx, client, v1alpha1.ClusterMode(config.mode), policyName)
 

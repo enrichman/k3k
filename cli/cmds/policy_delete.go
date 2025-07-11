@@ -5,7 +5,7 @@ import (
 
 	"github.com/rancher/k3k/pkg/apis/k3k.io/v1alpha1"
 	"github.com/sirupsen/logrus"
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v3"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
@@ -21,15 +21,14 @@ func NewPolicyDeleteCmd(appCtx *AppContext) *cli.Command {
 }
 
 func policyDeleteAction(appCtx *AppContext) cli.ActionFunc {
-	return func(clx *cli.Context) error {
-		ctx := context.Background()
+	return func(ctx context.Context, cmd *cli.Command) error {
 		client := appCtx.Client
 
-		if clx.NArg() != 1 {
-			return cli.ShowSubcommandHelp(clx)
+		if cmd.NArg() != 1 {
+			return cli.ShowSubcommandHelp(cmd)
 		}
 
-		name := clx.Args().First()
+		name := cmd.Args().First()
 
 		policy := &v1alpha1.VirtualClusterPolicy{}
 		policy.Name = name

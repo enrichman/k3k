@@ -1,10 +1,11 @@
 package cmds
 
 import (
+	"context"
 	"errors"
 
 	"github.com/rancher/k3k/pkg/apis/k3k.io/v1alpha1"
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v3"
 	"k8s.io/apimachinery/pkg/api/resource"
 )
 
@@ -15,7 +16,7 @@ func newCreateFlags(config *CreateConfig) []cli.Flag {
 			Usage:       "number of servers",
 			Destination: &config.servers,
 			Value:       1,
-			Action: func(ctx *cli.Context, value int) error {
+			Action: func(ctx context.Context, cmd *cli.Command, value int) error {
 				if value <= 0 {
 					return errors.New("invalid number of servers")
 				}
@@ -52,7 +53,7 @@ func newCreateFlags(config *CreateConfig) []cli.Flag {
 			Usage:       "persistence mode for the nodes (dynamic, ephemeral, static)",
 			Value:       string(v1alpha1.DynamicPersistenceMode),
 			Destination: &config.persistenceType,
-			Action: func(ctx *cli.Context, value string) error {
+			Action: func(ctx context.Context, cmd *cli.Command, value string) error {
 				switch v1alpha1.PersistenceMode(value) {
 				case v1alpha1.EphemeralPersistenceMode, v1alpha1.DynamicPersistenceMode:
 					return nil
@@ -70,7 +71,7 @@ func newCreateFlags(config *CreateConfig) []cli.Flag {
 			Name:        "storage-request-size",
 			Usage:       "storage size for dynamic persistence type",
 			Destination: &config.storageRequestSize,
-			Action: func(ctx *cli.Context, value string) error {
+			Action: func(ctx context.Context, cmd *cli.Command, value string) error {
 				if _, err := resource.ParseQuantity(value); err != nil {
 					return errors.New(`invalid storage size, should be a valid resource quantity e.g "10Gi"`)
 				}
@@ -107,7 +108,7 @@ func newCreateFlags(config *CreateConfig) []cli.Flag {
 			Usage:       "k3k mode type (shared, virtual)",
 			Destination: &config.mode,
 			Value:       "shared",
-			Action: func(ctx *cli.Context, value string) error {
+			Action: func(ctx context.Context, cmd *cli.Command, value string) error {
 				switch value {
 				case string(v1alpha1.VirtualClusterMode), string(v1alpha1.SharedClusterMode):
 					return nil

@@ -6,6 +6,7 @@ import (
 	"path"
 
 	"github.com/rancher/k3k/cli/cmds"
+	docs "github.com/urfave/cli-docs/v3"
 )
 
 func main() {
@@ -13,7 +14,7 @@ func main() {
 	app := cmds.NewApp()
 
 	// Generate the Markdown documentation
-	md, err := app.ToMarkdown()
+	md, err := docs.ToMarkdown(app)
 	if err != nil {
 		fmt.Println("Error generating documentation:", err)
 		os.Exit(1)

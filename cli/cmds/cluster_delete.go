@@ -8,7 +8,7 @@ import (
 	k3kcluster "github.com/rancher/k3k/pkg/controller/cluster"
 	"github.com/rancher/k3k/pkg/controller/cluster/agent"
 	"github.com/sirupsen/logrus"
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v3"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -41,15 +41,14 @@ func NewClusterDeleteCmd(appCtx *AppContext) *cli.Command {
 }
 
 func delete(appCtx *AppContext) cli.ActionFunc {
-	return func(clx *cli.Context) error {
-		ctx := context.Background()
+	return func(ctx context.Context, cmd *cli.Command) error {
 		client := appCtx.Client
 
-		if clx.NArg() != 1 {
-			return cli.ShowSubcommandHelp(clx)
+		if cmd.NArg() != 1 {
+			return cli.ShowSubcommandHelp(cmd)
 		}
 
-		name := clx.Args().First()
+		name := cmd.Args().First()
 		if name == k3kcluster.ClusterInvalidName {
 			return errors.New("invalid cluster name")
 		}

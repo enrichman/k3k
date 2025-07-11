@@ -13,7 +13,7 @@ import (
 	"github.com/rancher/k3k/pkg/controller/certs"
 	"github.com/rancher/k3k/pkg/controller/kubeconfig"
 	"github.com/sirupsen/logrus"
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v3"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apiserver/pkg/authentication/user"
@@ -25,8 +25,8 @@ import (
 var (
 	name                 string
 	cn                   string
-	org                  cli.StringSlice
-	altNames             cli.StringSlice
+	orgs                 []string
+	altNames             []string
 	expirationDays       int64
 	configName           string
 	kubeconfigServerHost string
@@ -53,12 +53,12 @@ func newGenerateKubeconfigFlags(appCtx *AppContext) []cli.Flag {
 		&cli.StringSliceFlag{
 			Name:  "org",
 			Usage: "Organization name (ORG) of the generated certificates for the kubeconfig",
-			Value: &org,
+			Value: orgs,
 		},
 		&cli.StringSliceFlag{
 			Name:  "altNames",
 			Usage: "altNames of the generated certificates for the kubeconfig",
-			Value: &altNames,
+			Value: altNames,
 		},
 		&cli.Int64Flag{
 			Name:        "expiration-days",
@@ -79,7 +79,7 @@ func NewKubeconfigCmd(appCtx *AppContext) *cli.Command {
 	return &cli.Command{
 		Name:  "kubeconfig",
 		Usage: "Manage kubeconfig for clusters",
-		Subcommands: []*cli.Command{
+		Commands: []*cli.Command{
 			NewKubeconfigGenerateCmd(appCtx),
 		},
 	}
@@ -100,8 +100,7 @@ func NewKubeconfigGenerateCmd(appCtx *AppContext) *cli.Command {
 }
 
 func generate(appCtx *AppContext) cli.ActionFunc {
-	return func(clx *cli.Context) error {
-		ctx := context.Background()
+	return func(ctx context.Context, cmd *cli.Command) error {
 		client := appCtx.Client
 
 		clusterKey := types.NamespacedName{
@@ -123,16 +122,12 @@ func generate(appCtx *AppContext) cli.ActionFunc {
 		host := strings.Split(url.Host, ":")
 		if kubeconfigServerHost != "" {
 			host = []string{kubeconfigServerHost}
-
-			if err := altNames.Set(kubeconfigServerHost); err != nil {
-				return err
-			}
+			altNames = append(altNames, kubeconfigServerHost)
 		}
 
-		certAltNames := certs.AddSANs(altNames.Value())
+		certAltNames := certs.AddSANs(altNames)
 
-		orgs := org.Value()
-		if orgs == nil {
+		if len(orgs) == 0 {
 			orgs = []string{user.SystemPrivilegedGroup}
 		}
 
