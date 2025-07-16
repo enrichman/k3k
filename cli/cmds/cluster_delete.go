@@ -20,7 +20,7 @@ import (
 var keepData bool
 
 func NewClusterDeleteCmd(appCtx *AppContext) *cli.Command {
-	flags := CommonFlags(appCtx)
+	flags := []cli.Flag{}
 	flags = append(flags, FlagNamespace(appCtx))
 	flags = append(flags,
 		&cli.BoolFlag{

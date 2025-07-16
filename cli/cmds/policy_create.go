@@ -22,8 +22,7 @@ type VirtualClusterPolicyCreateConfig struct {
 func NewPolicyCreateCmd(appCtx *AppContext) *cli.Command {
 	config := &VirtualClusterPolicyCreateConfig{}
 
-	flags := CommonFlags(appCtx)
-	flags = append(flags,
+	flags := []cli.Flag{
 		&cli.StringFlag{
 			Name:        "mode",
 			Usage:       "The allowed mode type of the policy",
@@ -38,7 +37,7 @@ func NewPolicyCreateCmd(appCtx *AppContext) *cli.Command {
 				}
 			},
 		},
-	)
+	}
 
 	return &cli.Command{
 		Name:            "create",
