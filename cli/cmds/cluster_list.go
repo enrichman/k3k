@@ -2,6 +2,7 @@ package cmds
 
 import (
 	"context"
+	"errors"
 
 	"github.com/rancher/k3k/pkg/apis/k3k.io/v1alpha1"
 	"github.com/urfave/cli/v3"
@@ -12,16 +13,14 @@ import (
 )
 
 func NewClusterListCmd(appCtx *AppContext) *cli.Command {
-	flags := CommonFlags(appCtx)
-	flags = append(flags, FlagNamespace(appCtx))
-
 	return &cli.Command{
-		Name:            "list",
-		Usage:           "List all the existing cluster",
-		UsageText:       "k3kcli cluster list [command options]",
-		Action:          list(appCtx),
-		Flags:           flags,
-		HideHelpCommand: true,
+		Name:      "list",
+		Usage:     "List all the existing cluster",
+		UsageText: "k3kcli cluster list [command options]",
+		Action:    list(appCtx),
+		Flags:     []cli.Flag{FlagNamespace(appCtx)},
+		//	HideHelpCommand: true,
+		//HideHelp:  true,
 	}
 }
 
@@ -30,7 +29,8 @@ func list(appCtx *AppContext) cli.ActionFunc {
 		client := appCtx.Client
 
 		if cmd.NArg() > 0 {
-			return cli.ShowSubcommandHelp(cmd)
+			cli.HelpPrinter(cmd.Root().Writer, cli.CommandHelpTemplate, cmd)
+			return errors.New("too many args")
 		}
 
 		var clusters v1alpha1.ClusterList

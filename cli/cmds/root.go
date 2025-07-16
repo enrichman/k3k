@@ -2,6 +2,7 @@ package cmds
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/rancher/k3k/pkg/apis/k3k.io/v1alpha1"
 	"github.com/rancher/k3k/pkg/buildinfo"
@@ -34,6 +35,7 @@ func NewApp() *cli.Command {
 		Usage:                 "CLI for K3K",
 		Version:               buildinfo.Version,
 		Flags:                 CommonFlags(appCtx),
+		HideHelpCommand:       true,
 		Before: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
 			if appCtx.Debug {
 				logrus.SetLevel(logrus.DebugLevel)
@@ -41,6 +43,10 @@ func NewApp() *cli.Command {
 
 			restConfig, err := loadRESTConfig(appCtx.Kubeconfig)
 			if err != nil {
+				if clientcmd.IsConfigurationInvalid(err) {
+					return ctx, fmt.Errorf("Kubeconfig configuration is invalid: %w", err)
+				}
+
 				return ctx, err
 			}
 
@@ -79,13 +85,9 @@ func (ctx *AppContext) Namespace(name string) string {
 
 func loadRESTConfig(kubeconfig string) (*rest.Config, error) {
 	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-	configOverrides := &clientcmd.ConfigOverrides{}
+	loadingRules.ExplicitPath = kubeconfig
 
-	if kubeconfig != "" {
-		loadingRules.ExplicitPath = kubeconfig
-	}
-
-	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
+	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, &clientcmd.ConfigOverrides{})
 
 	return kubeConfig.ClientConfig()
 }

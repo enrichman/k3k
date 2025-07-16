@@ -96,10 +96,6 @@ List all the existing cluster
 
 >k3kcli cluster list [command options]
 
-**--debug**: Turn on debug logs
-
-**--kubeconfig**="": kubeconfig path
-
 **--namespace, -n**="": namespace of the k3k cluster
 
 ## policy
