@@ -2,11 +2,14 @@ package cmds
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/rancher/k3k/pkg/apis/k3k.io/v1alpha1"
 	"github.com/rancher/k3k/pkg/buildinfo"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 	"github.com/urfave/cli/v2"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -33,6 +36,8 @@ func NewApp() *cobra.Command {
 		Use:   "k3kcli",
 		Short: "CLI for K3K",
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			initializeConfig(cmd)
+
 			if appCtx.Debug {
 				logrus.SetLevel(logrus.DebugLevel)
 			}
@@ -64,6 +69,7 @@ func NewApp() *cobra.Command {
 
 	rootCmd.AddCommand(
 		versionCmd,
+		NewClusterCmd(appCtx),
 	)
 
 	// app.Commands = []*cli.Command{
@@ -96,6 +102,10 @@ func loadRESTConfig(kubeconfig string) (*rest.Config, error) {
 	return kubeConfig.ClientConfig()
 }
 
+func CobraFlagNamespace(appCtx *AppContext, flag *pflag.FlagSet) {
+	flag.StringVarP(&appCtx.namespace, "namespace", "n", "", "namespace of the k3k cluster")
+}
+
 func FlagNamespace(appCtx *AppContext) *cli.StringFlag {
 	return &cli.StringFlag{
 		Name:        "namespace",
@@ -111,4 +121,18 @@ var versionCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("k3kcli version " + buildinfo.Version)
 	},
+}
+
+func initializeConfig(cmd *cobra.Command) {
+	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
+	viper.AutomaticEnv()
+
+	// Bind the current command's flags to viper
+	cmd.Flags().VisitAll(func(f *pflag.Flag) {
+		// Apply the viper config value to the flag when the flag is not set and viper has a value
+		if !f.Changed && viper.IsSet(f.Name) {
+			val := viper.Get(f.Name)
+			cmd.Flags().Set(f.Name, fmt.Sprintf("%v", val))
+		}
+	})
 }
