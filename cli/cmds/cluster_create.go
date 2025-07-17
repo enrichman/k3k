@@ -13,8 +13,6 @@ import (
 	"github.com/rancher/k3k/pkg/controller/kubeconfig"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
-	"github.com/urfave/cli/v2"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -32,10 +30,10 @@ type CreateConfig struct {
 	serviceCIDR          string
 	servers              int
 	agents               int
-	serverArgs           cli.StringSlice
-	agentArgs            cli.StringSlice
-	serverEnvs           cli.StringSlice
-	agentEnvs            cli.StringSlice
+	serverArgs           []string
+	agentArgs            []string
+	serverEnvs           []string
+	agentEnvs            []string
 	persistenceType      string
 	storageClassName     string
 	storageRequestSize   string
@@ -49,10 +47,6 @@ type CreateConfig struct {
 func NewClusterCreateCmd(appCtx *AppContext) *cobra.Command {
 	createConfig := &CreateConfig{}
 
-	flags := []cli.Flag{}
-	flags = append(flags, FlagNamespace(appCtx))
-	flags = append(flags, newCreateFlags(createConfig)...)
-
 	cmd := &cobra.Command{
 		Use:     "create",
 		Short:   "Create new cluster",
@@ -62,15 +56,13 @@ func NewClusterCreateCmd(appCtx *AppContext) *cobra.Command {
 	}
 
 	CobraFlagNamespace(appCtx, cmd.Flags())
+	createFlags(cmd, createConfig)
 
 	return cmd
 }
 
 func createAction(appCtx *AppContext, config *CreateConfig) func(cmd *cobra.Command, args []string) error {
 	return func(cmd *cobra.Command, args []string) error {
-
-		fmt.Println("viper.GetString", viper.GetString("kubeconfig"))
-
 		ctx := context.Background()
 		client := appCtx.Client
 		name := args[0]
@@ -179,10 +171,10 @@ func newCluster(name, namespace string, config *CreateConfig) *v1alpha1.Cluster 
 			Agents:      ptr.To(int32(config.agents)),
 			ClusterCIDR: config.clusterCIDR,
 			ServiceCIDR: config.serviceCIDR,
-			ServerArgs:  config.serverArgs.Value(),
-			AgentArgs:   config.agentArgs.Value(),
-			ServerEnvs:  env(config.serverEnvs.Value()),
-			AgentEnvs:   env(config.agentEnvs.Value()),
+			ServerArgs:  config.serverArgs,
+			AgentArgs:   config.agentArgs,
+			ServerEnvs:  env(config.serverEnvs),
+			AgentEnvs:   env(config.agentEnvs),
 			Version:     config.version,
 			Mode:        v1alpha1.ClusterMode(config.mode),
 			Persistence: v1alpha1.PersistenceConfig{
