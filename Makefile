@@ -102,8 +102,8 @@ install:	## Install K3k with Helm on the targeted Kubernetes cluster
 		--set sharedAgent.image.tag=$(VERSION) \
 		k3k ./charts/k3k/
 
-.PHONY: k3d-setup
-k3d-setup:	## Start a K3d cluster for local development
+.PHONY: k3d-start
+k3d-start:	## Start a K3d cluster for local development
 	k3d cluster create k3k --servers 3 -p "30000-30010:30000-30010@server:0"
 
 .PHONY: k3d-import
