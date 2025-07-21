@@ -60,24 +60,19 @@ jobs:
 
         curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
 
-    - name: Setup Kubernetes (k3d)
-      run: |        
-        k3d cluster create k3k --servers 3 -p "30000-30010:30000-30010@server:0"
-        
-        kubectl cluster-info
-        kubectl get nodes
-
-    - name: Setup K3k
+    - name: Setup K3k on K3d
       run: |
         make
 
         # add k3kcli to $PATH
         echo "${{ github.workspace }}/bin" >> $GITHUB_PATH
 
-        VERSION=$(make version)
-        k3d image import rancher/k3k:${VERSION} -c k3k --verbose
-        k3d image import rancher/k3k-kubelet:${VERSION} -c k3k --verbose
+        # Setup K3d
+        make k3d-start
+        kubectl cluster-info
+        kubectl get nodes
 
+        make k3d-import
         make install
         
         echo "Wait for K3k controller to be available"
@@ -198,24 +193,19 @@ jobs:
 
         curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
 
-    - name: Setup Kubernetes (k3d)
-      run: |
-        k3d cluster create k3k --servers 3 -p "30000-30010:30000-30010@server:0"
-        
-        kubectl cluster-info
-        kubectl get nodes
-
-    - name: Setup K3k
+    - name: Setup K3k on K3d
       run: |
         make
 
         # add k3kcli to $PATH
         echo "${{ github.workspace }}/bin" >> $GITHUB_PATH
 
-        VERSION=$(make version)
-        k3d image import rancher/k3k:${VERSION} -c k3k --verbose
-        k3d image import rancher/k3k-kubelet:${VERSION} -c k3k --verbose
+        # Setup K3d
+        make k3d-start
+        kubectl cluster-info
+        kubectl get nodes
 
+        make k3d-import
         make install
         
         echo "Wait for K3k controller to be available"

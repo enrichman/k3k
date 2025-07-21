@@ -102,6 +102,19 @@ install:	## Install K3k with Helm on the targeted Kubernetes cluster
 		--set sharedAgent.image.tag=$(VERSION) \
 		k3k ./charts/k3k/
 
+.PHONY: k3d-setup
+k3d-setup:	## Start a K3d cluster for local development
+	k3d cluster create k3k --servers 3 -p "30000-30010:30000-30010@server:0"
+
+.PHONY: k3d-import
+k3d-import:	## Import the K3k images to the K3d cluster
+	k3d image import $(REPO)/k3k:$(VERSION) -c k3k --verbose
+    k3d image import $(REPO)/k3k-kubelet:$(VERSION) -c k3k --verbose
+
+.PHONY: k3d-stop
+k3d-stop:	## Stop the K3d cluster
+	k3d cluster delete k3k
+
 .PHONY: help
 help:	## Show this help.
 	@egrep -h '\s##\s' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m  %-30s\033[0m %s\n", $$1, $$2}'
