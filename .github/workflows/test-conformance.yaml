@@ -61,37 +61,22 @@ jobs:
         curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
 
     - name: Setup Kubernetes (k3d)
-      env:
-        REPO_NAME: k3k-registry
-        REPO_PORT: 12345
-      run: |
-        echo "127.0.0.1 ${REPO_NAME}" | sudo tee -a /etc/hosts
-
-        k3d registry create ${REPO_NAME} --port ${REPO_PORT}
-        
-        k3d cluster create k3k --servers 3 \
-          -p "30000-30010:30000-30010@server:0" \
-          --registry-use k3d-${REPO_NAME}:${REPO_PORT}
+      run: |        
+        k3d cluster create k3k --servers 3 -p "30000-30010:30000-30010@server:0"
         
         kubectl cluster-info
         kubectl get nodes
 
     - name: Setup K3k
-      env:
-        REPO: k3k-registry:12345
       run: |
-        echo "127.0.0.1 k3k-registry" | sudo tee -a /etc/hosts
-
-        make build
-        make package
-        make push
+        make
 
         # add k3kcli to $PATH
         echo "${{ github.workspace }}/bin" >> $GITHUB_PATH
 
         VERSION=$(make version)
-        k3d image import ${REPO}/k3k:${VERSION} -c k3k --verbose
-        k3d image import ${REPO}/k3k-kubelet:${VERSION} -c k3k --verbose
+        k3d image import rancher/k3k:${VERSION} -c k3k --verbose
+        k3d image import rancher/k3k-kubelet:${VERSION} -c k3k --verbose
 
         make install
         
@@ -214,37 +199,22 @@ jobs:
         curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
 
     - name: Setup Kubernetes (k3d)
-      env:
-        REPO_NAME: k3k-registry
-        REPO_PORT: 12345
       run: |
-        echo "127.0.0.1 ${REPO_NAME}" | sudo tee -a /etc/hosts
-
-        k3d registry create ${REPO_NAME} --port ${REPO_PORT}
-        
-        k3d cluster create k3k --servers 3 \
-          -p "30000-30010:30000-30010@server:0" \
-          --registry-use k3d-${REPO_NAME}:${REPO_PORT}
+        k3d cluster create k3k --servers 3 -p "30000-30010:30000-30010@server:0"
         
         kubectl cluster-info
         kubectl get nodes
 
     - name: Setup K3k
-      env:
-        REPO: k3k-registry:12345
       run: |
-        echo "127.0.0.1 k3k-registry" | sudo tee -a /etc/hosts
-
-        make build
-        make package
-        make push
+        make
 
         # add k3kcli to $PATH
         echo "${{ github.workspace }}/bin" >> $GITHUB_PATH
 
         VERSION=$(make version)
-        k3d image import ${REPO}/k3k:${VERSION} -c k3k --verbose
-        k3d image import ${REPO}/k3k-kubelet:${VERSION} -c k3k --verbose
+        k3d image import rancher/k3k:${VERSION} -c k3k --verbose
+        k3d image import rancher/k3k-kubelet:${VERSION} -c k3k --verbose
 
         make install
         
