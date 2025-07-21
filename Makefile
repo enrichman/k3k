@@ -110,7 +110,7 @@ k3d-start:	## Start a K3d cluster for local development
 .PHONY: k3d-import
 k3d-import:	## Import the K3k images to the K3d cluster
 	k3d image import $(REPO)/k3k:$(VERSION) -c k3k --verbose
-    k3d image import $(REPO)/k3k-kubelet:$(VERSION) -c k3k --verbose
+	k3d image import $(REPO)/k3k-kubelet:$(VERSION) -c k3k --verbose
 
 .PHONY: k3d-stop
 k3d-stop:	## Stop the K3d cluster
