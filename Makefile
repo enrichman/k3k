@@ -100,6 +100,7 @@ install:	## Install K3k with Helm on the targeted Kubernetes cluster
 		--set image.tag=$(VERSION) \
 		--set sharedAgent.image.repository=$(REPO)/k3k-kubelet \
 		--set sharedAgent.image.tag=$(VERSION) \
+		--set sharedAgent.image.imagePullPolicy=IfNotPresent \
 		k3k ./charts/k3k/
 
 .PHONY: k3d-start
