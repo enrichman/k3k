@@ -5,7 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
+	"runtime/coverage"
 
 	"github.com/go-logr/zapr"
 	"github.com/rancher/k3k/cli/cmds"
@@ -24,6 +26,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	ctrlruntimelog "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+
+	"github.com/enrichman/httpgrace"
 )
 
 var (
@@ -181,6 +185,8 @@ func run(clx *cli.Context) error {
 		return fmt.Errorf("failed to add the clusterpolicy controller: %v", err)
 	}
 
+	gollectCoverage()
+
 	if err := mgr.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start the manager: %v", err)
 	}
@@ -198,4 +204,21 @@ func validate() error {
 	}
 
 	return nil
+}
+
+func gollectCoverage() {
+	gocoverdir := os.Getenv("GOCOVERDIR")
+	if gocoverdir == "" {
+		return
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/collect", func(http.ResponseWriter, *http.Request) {
+		_ = coverage.WriteMetaDir(gocoverdir)
+		_ = coverage.WriteCountersDir(gocoverdir)
+	})
+
+	go func() {
+		_ = httpgrace.ListenAndServe(":8088", mux)
+	}()
 }

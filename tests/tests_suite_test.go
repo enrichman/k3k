@@ -6,13 +6,12 @@ import (
 	"io"
 	"maps"
 	"os"
+	"os/exec"
 	"path"
 	"testing"
 	"time"
 
 	"github.com/go-logr/zapr"
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
 	"github.com/rancher/k3k/pkg/apis/k3k.io/v1alpha1"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/k3s"
@@ -21,11 +20,16 @@ import (
 	"helm.sh/helm/v3/pkg/chart/loader"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
 func TestTests(t *testing.T) {
@@ -34,10 +38,11 @@ func TestTests(t *testing.T) {
 }
 
 var (
-	k3sContainer *k3s.K3sContainer
-	hostIP       string
-	k8s          *kubernetes.Clientset
-	k8sClient    client.Client
+	k3sContainer   *k3s.K3sContainer
+	hostIP         string
+	k8s            *kubernetes.Clientset
+	k8sClient      client.Client
+	kubeconfigPath string
 )
 
 var _ = BeforeSuite(func() {
@@ -56,6 +61,20 @@ var _ = BeforeSuite(func() {
 
 	initKubernetesClient(kubeconfig)
 	installK3kChart(kubeconfig)
+
+	tmpFile, err := os.CreateTemp("", "kubeconfig-")
+	Expect(err).To(Not(HaveOccurred()))
+	defer tmpFile.Close()
+
+	_, err = tmpFile.Write(kubeconfig)
+	Expect(err).To(Not(HaveOccurred()))
+	kubeconfigPath = tmpFile.Name()
+
+	DeferCleanup(os.Remove, kubeconfigPath)
+
+	patchDeployment()
+
+	time.Sleep(10 * time.Second)
 })
 
 func initKubernetesClient(kubeconfig []byte) {
@@ -138,6 +157,8 @@ var _ = AfterSuite(func() {
 
 	fmt.Fprintln(GinkgoWriter, "k3s logs written to: "+logfile)
 
+	collect()
+
 	// dump k3k controller logs
 	readCloser, err = k3sContainer.Logs(context.Background())
 	Expect(err).To(Not(HaveOccurred()))
@@ -188,4 +209,93 @@ func writeLogs(filename string, logs io.ReadCloser) {
 	Expect(err).To(Not(HaveOccurred()))
 
 	fmt.Fprintln(GinkgoWriter, "logs written to: "+filename)
+}
+
+func patchDeployment() {
+	// --- Configuration ---
+	namespace := "k3k-system"
+	deploymentName := "k3k"
+	containerName := "k3k"
+
+	patchPayload := fmt.Sprintf(`{
+		"spec": {
+			"template": {
+				"spec": {
+					"volumes": [{
+						"name": "tmp-covdata",
+						"emptyDir": {}
+					}],
+					"containers": [{
+						"name": "%s",
+						"volumeMounts": [{
+							"name": "tmp-covdata",
+							"mountPath": "/tmp/covdata"
+						}],
+						"env": [{
+							"name": "GOCOVERDIR",
+							"value": "/tmp/covdata"
+						}]
+					}]
+				}
+			}
+		}
+	}`, containerName)
+
+	fmt.Fprintf(GinkgoWriter, "Patching deployment '%s' in namespace '%s'...\n", deploymentName, namespace)
+
+	result, err := k8s.AppsV1().Deployments(namespace).Patch(
+		context.Background(),
+		deploymentName,
+		types.StrategicMergePatchType,
+		[]byte(patchPayload),
+		metav1.PatchOptions{},
+	)
+	Expect(err).ToNot(HaveOccurred())
+
+	fmt.Fprintf(GinkgoWriter, "Successfully patched deployment. New resource version: %s\n", result.ResourceVersion)
+}
+
+func collect() {
+	podList, err := k8s.CoreV1().Pods("k3k-system").List(context.Background(), metav1.ListOptions{LabelSelector: "app.kubernetes.io/name=k3k"})
+	Expect(err).ToNot(HaveOccurred())
+	Expect(len(podList.Items)).To(Equal(1))
+
+	k3kPod := podList.Items[0]
+	k3kIP := k3kPod.Status.PodIP
+
+	kexec := exec.Command(
+		"kubectl",
+		"run",
+		"my-wget",
+		"--kubeconfig", kubeconfigPath,
+		"--namespace", "k3k-system",
+		"--image", "busybox",
+		"--",
+		"wget", "-O-", "http://"+k3kIP+":8088/collect",
+	)
+
+	output, err := kexec.CombinedOutput()
+	fmt.Fprintln(GinkgoWriter, string(output))
+	Expect(err).ToNot(HaveOccurred())
+
+	// wait for the coverage files to be collected
+	time.Sleep(5 * time.Second)
+
+	// download the coverage files
+	cp := exec.Command(
+		"kubectl",
+		"cp",
+		"--kubeconfig", kubeconfigPath,
+		"--namespace", "k3k-system",
+		k3kPod.Name+":/tmp/covdata", "covdata",
+	)
+
+	output, err = cp.CombinedOutput()
+	fmt.Fprintln(GinkgoWriter, string(output))
+	Expect(err).ToNot(HaveOccurred())
+
+	covdata := exec.Command("go", "tool", "covdata", "textfmt", "-i=covdata", "-o", "covdata/cover.out")
+	output, err = covdata.CombinedOutput()
+	fmt.Fprintln(GinkgoWriter, string(output))
+	Expect(err).ToNot(HaveOccurred())
 }
