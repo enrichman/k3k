@@ -2,9 +2,11 @@ package cmds
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -54,7 +56,34 @@ func NewKubeconfigGenerateCmd(appCtx *AppContext) *cobra.Command {
 		Use:   "generate",
 		Short: "Generate kubeconfig for clusters",
 		RunE:  generate(appCtx, cfg),
-		Args:  cobra.NoArgs,
+		Args:  cobra.ExactArgs(1),
+		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			client := appCtx.Client
+
+			var clusterList v1alpha1.ClusterList
+			if err := client.List(context.Background(), &clusterList); err != nil {
+				return nil, cobra.ShellCompDirectiveError
+			}
+
+			var clusterNames []string
+			for _, cluster := range clusterList.Items {
+				nsName := fmt.Sprintf("%s/%s", cluster.Namespace, cluster.Name)
+
+				if strings.HasPrefix(nsName, toComplete) {
+					clusterNames = append(clusterNames, nsName)
+				}
+			}
+
+			var filtered []string
+
+			for _, clusterName := range clusterNames {
+				if !slices.Contains(args, clusterName) {
+					filtered = append(filtered, clusterName)
+				}
+			}
+
+			return filtered, cobra.ShellCompDirectiveNoFileComp
+		},
 	}
 
 	CobraFlagNamespace(appCtx, cmd.Flags())
@@ -75,16 +104,17 @@ func generateKubeconfigFlags(cmd *cobra.Command, cfg *GenerateKubeconfigConfig) 
 
 func generate(appCtx *AppContext, cfg *GenerateKubeconfigConfig) func(cmd *cobra.Command, args []string) error {
 	return func(cmd *cobra.Command, args []string) error {
+		nsName := strings.Split(args[0], "/")
+
 		ctx := context.Background()
 		client := appCtx.Client
 
 		clusterKey := types.NamespacedName{
-			Name:      cfg.name,
-			Namespace: appCtx.Namespace(cfg.name),
+			Namespace: nsName[0],
+			Name:      nsName[1],
 		}
 
 		var cluster v1alpha1.Cluster
-
 		if err := client.Get(ctx, clusterKey, &cluster); err != nil {
 			return err
 		}
