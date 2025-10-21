@@ -40,8 +40,9 @@ import (
 )
 
 const (
-	k3kNamespace = "k3k-system"
-	k3kName      = "k3k"
+	k3kNamespace     = "k3k-system"
+	k3kName          = "k3k-suse-virtual-cluster-engine"
+	k3kContainerName = "suse-virtual-cluster-engine"
 
 	slowTestsLabel         = "slow"
 	updateTestsLabel       = "update"
@@ -258,7 +259,7 @@ func patchPVC(ctx context.Context, clientset *kubernetes.Clientset) {
                 ],
                 "containers": [
                     {
-                        "name": "k3k",
+                        "name": "suse-virtual-cluster-engine",
                         "volumeMounts": [
                             {
                                 "name": "tmp-covdata",
@@ -357,7 +358,7 @@ func dumpK3kCoverageData(ctx context.Context, folder string) {
 
 	k3kPod := podList.Items[0]
 
-	cmd := exec.Command("kubectl", "exec", "-n", k3kNamespace, k3kPod.Name, "-c", "k3k", "--", "kill", "1")
+	cmd := exec.Command("kubectl", "exec", "-n", k3kNamespace, k3kPod.Name, "-c", "suse-virtual-cluster-engine", "--", "kill", "1")
 	output, err := cmd.CombinedOutput()
 	Expect(err).NotTo(HaveOccurred(), string(output))
 

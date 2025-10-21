@@ -36,6 +36,9 @@ var _ = When("a cluster's status is tracked", Label("e2e"), Label(statusTestsLab
 		}
 		Expect(k8sClient.Create(ctx, vcp)).To(Succeed())
 
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(namespace), namespace)
+		Expect(err).To(Not(HaveOccurred()))
+
 		namespace.Labels = map[string]string{
 			policy.PolicyNameLabelKey: vcp.Name,
 		}
