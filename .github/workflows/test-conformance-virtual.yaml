@@ -1,0 +1,14 @@
+name: Conformance Tests - Virtual Mode
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  hello:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
