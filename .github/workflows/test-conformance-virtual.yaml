@@ -15,6 +15,6 @@ jobs:
 
     - run: |
         sudo snap install multipass
-        multipass launch --name node
-        multipass list
+        sudo multipass launch --name node
+        sudo multipass list
 
