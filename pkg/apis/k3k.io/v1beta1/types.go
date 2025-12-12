@@ -53,9 +53,9 @@ type ClusterSpec struct {
 	Mode ClusterMode `json:"mode,omitempty"`
 
 	// Servers specifies the number of K3s pods to run in server (control plane) mode.
-	// Must be at least 1. Defaults to 1.
+	// Must be 0 or greater. Defaults to 1.
 	//
-	// +kubebuilder:validation:XValidation:message="cluster must have at least one server",rule="self >= 1"
+	// +kubebuilder:validation:XValidation:message="invalid servers value: value for servers cannot be negative",rule="self >= 0"
 	// +kubebuilder:default=1
 	// +optional
 	Servers *int32 `json:"servers"`
@@ -65,7 +65,7 @@ type ClusterSpec struct {
 	// This field is ignored in "shared" mode.
 	//
 	// +kubebuilder:default=0
-	// +kubebuilder:validation:XValidation:message="invalid value for agents",rule="self >= 0"
+	// +kubebuilder:validation:XValidation:message="invalid agents value: value for agents cannot be negative",rule="self >= 0"
 	// +optional
 	Agents *int32 `json:"agents"`
 
