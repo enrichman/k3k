@@ -204,7 +204,7 @@ spec:
                 format: int32
                 type: integer
                 x-kubernetes-validations:
-                - message: invalid value for agents
+                - message: 'invalid agents value: value for agents cannot be negative'
                   rule: self >= 0
               clusterCIDR:
                 description: |-
@@ -588,12 +588,12 @@ spec:
                 default: 1
                 description: |-
                   Servers specifies the number of K3s pods to run in server (control plane) mode.
-                  Must be at least 1. Defaults to 1.
+                  Must be 0 or greater. Defaults to 1.
                 format: int32
                 type: integer
                 x-kubernetes-validations:
-                - message: cluster must have at least one server
-                  rule: self >= 1
+                - message: 'invalid servers value: value for servers cannot be negative'
+                  rule: self >= 0
               serviceCIDR:
                 description: |-
                   ServiceCIDR is the CIDR range for service IPs.
