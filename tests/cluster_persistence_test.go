@@ -212,3 +212,50 @@ var _ = When("a dynamic cluster is installed", Label(e2eTestLabel), Label(persis
 			Should(BeNil())
 	})
 })
+
+var _ = When("a virtual dynamic cluster is installed", Label(e2eTestLabel), Label(persistenceTestsLabel), func() {
+	var virtualCluster *VirtualCluster
+
+	It("works after a restart", func() {
+		ctx := context.Background()
+
+		namespace := NewNamespace()
+
+		DeferCleanup(func() {
+			DeleteNamespaces(virtualCluster.Cluster.Namespace)
+		})
+
+		cluster := NewCluster(namespace.Name)
+		cluster.Spec.Mode = v1beta1.VirtualClusterMode
+		cluster.Spec.Persistence.Type = v1beta1.DynamicPersistenceMode
+		cluster.Spec.ServerArgs = nil
+
+		CreateCluster(cluster)
+
+		client, restConfig := NewVirtualK8sClientAndConfig(cluster)
+
+		virtualCluster = &VirtualCluster{
+			Cluster:    cluster,
+			RestConfig: restConfig,
+			Client:     client,
+		}
+
+		_, err := virtualCluster.Client.ServerVersion()
+		Expect(err).To(Not(HaveOccurred()))
+
+		restartServerPod(ctx, virtualCluster)
+
+		By("Server pod up and running again")
+
+		By("Using old k8s client configuration should succeed")
+
+		Eventually(func() error {
+			_, err = virtualCluster.Client.DiscoveryClient.ServerVersion()
+			return err
+		}).
+			WithTimeout(5 * time.Minute).
+			WithPolling(time.Second * 5).
+			MustPassRepeatedly(10).
+			Should(BeNil())
+	})
+})

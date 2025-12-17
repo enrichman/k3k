@@ -92,18 +92,18 @@ func (p *StatefulSetReconciler) Reconcile(ctx context.Context, req reconcile.Req
 		return reconcile.Result{}, err
 	}
 
-	if len(podList.Items) == 1 {
-		serverPod := podList.Items[0]
-		if !serverPod.DeletionTimestamp.IsZero() {
-			if controllerutil.RemoveFinalizer(&serverPod, etcdPodFinalizerName) {
-				if err := p.Client.Update(ctx, &serverPod); err != nil {
-					return reconcile.Result{}, err
-				}
-			}
+	// if len(podList.Items) == 1 {
+	// 	serverPod := podList.Items[0]
+	// 	if !serverPod.DeletionTimestamp.IsZero() {
+	// 		if controllerutil.RemoveFinalizer(&serverPod, etcdPodFinalizerName) {
+	// 			if err := p.Client.Update(ctx, &serverPod); err != nil {
+	// 				return reconcile.Result{}, err
+	// 			}
+	// 		}
 
-			return reconcile.Result{}, nil
-		}
-	}
+	// 		return reconcile.Result{}, nil
+	// 	}
+	// }
 
 	for _, pod := range podList.Items {
 		if err := p.handleServerPod(ctx, cluster, &pod); err != nil {
@@ -250,7 +250,7 @@ func removePeer(ctx context.Context, client *clientv3.Client, name, address stri
 				log.V(1).Info("Removing member from ETCD", "name", member.Name, "id", member.ID, "address", address)
 
 				_, err := client.MemberRemove(ctx, member.ID)
-				if errors.Is(err, rpctypes.ErrGRPCMemberNotFound) {
+				if errors.Is(err, rpctypes.ErrGRPCMemberNotFound) || errors.Is(err, rpctypes.ErrGRPCMemberNotEnoughStarted) {
 					return nil
 				}
 
