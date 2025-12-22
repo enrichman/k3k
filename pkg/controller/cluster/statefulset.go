@@ -12,7 +12,6 @@ import (
 	"go.etcd.io/etcd/api/v3/v3rpc/rpctypes"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -28,7 +27,6 @@ import (
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/rancher/k3k/pkg/apis/k3k.io/v1beta1"
-	k3kcontroller "github.com/rancher/k3k/pkg/controller"
 	"github.com/rancher/k3k/pkg/controller/certs"
 	"github.com/rancher/k3k/pkg/controller/cluster/server"
 	"github.com/rancher/k3k/pkg/controller/cluster/server/bootstrap"
@@ -120,7 +118,7 @@ func (p *StatefulSetReconciler) handleServerPod(ctx context.Context, cluster v1b
 
 	if pod.DeletionTimestamp.IsZero() {
 		if controllerutil.AddFinalizer(pod, etcdPodFinalizerName) {
-			log.V(1).Info("Server Pod is being deleted. Removing finalizer", "pod", pod.Name, "namespace", pod.Namespace)
+			log.V(1).Info("Server Pod is new, adding finalizer", "pod", pod.Name, "namespace", pod.Namespace)
 
 			return p.Client.Update(ctx, pod)
 		}
@@ -145,6 +143,17 @@ func (p *StatefulSetReconciler) handleServerPod(ctx context.Context, cluster v1b
 
 	tlsConfig, err := p.getETCDTLS(ctx, &cluster)
 	if err != nil {
+		if errors.Is(err, bootstrap.ErrServerNotReady) {
+			// remove our finalizer from the list and update it.
+			if controllerutil.RemoveFinalizer(pod, etcdPodFinalizerName) {
+				log.V(1).Info("Deleting Server Pod removing finalizer", "pod", pod.Name, "namespace", pod.Namespace)
+
+				if err := p.Client.Update(ctx, pod); err != nil {
+					return err
+				}
+			}
+		}
+
 		return err
 	}
 
@@ -160,7 +169,7 @@ func (p *StatefulSetReconciler) handleServerPod(ctx context.Context, cluster v1b
 	}
 
 	if err := removePeer(ctx, client, pod.Name, pod.Status.PodIP); err != nil {
-		return err
+		log.Error(err, "removePeer returned an error. Skipping because of reason")
 	}
 
 	// remove our finalizer from the list and update it.
@@ -179,22 +188,8 @@ func (p *StatefulSetReconciler) getETCDTLS(ctx context.Context, cluster *v1beta1
 	log := ctrl.LoggerFrom(ctx)
 	log.V(1).Info("Generating ETCD TLS client certificate", "cluster", cluster)
 
-	token, err := p.clusterToken(ctx, cluster)
+	b, err := bootstrap.GetFromSecret(ctx, p.Client, cluster)
 	if err != nil {
-		return nil, err
-	}
-
-	endpoint := server.ServiceName(cluster.Name) + "." + cluster.Namespace
-
-	var b *bootstrap.ControlRuntimeBootstrap
-
-	if err := retry.OnError(k3kcontroller.Backoff, func(err error) bool {
-		return true
-	}, func() error {
-		var err error
-		b, err = bootstrap.DecodedBootstrap(token, endpoint)
-		return err
-	}); err != nil {
 		return nil, err
 	}
 
@@ -227,11 +222,9 @@ func removePeer(ctx context.Context, client *clientv3.Client, name, address stri
 	log := ctrl.LoggerFrom(ctx)
 	log.V(1).Info("Removing peer from cluster", "name", name, "address", address)
 
-	ctx, cancel := context.WithTimeout(ctx, memberRemovalTimeout)
-	defer cancel()
-
 	members, err := client.MemberList(ctx)
 	if err != nil {
+		log.Error(err, "ETCD member list returned an error")
 		return err
 	}
 
@@ -250,6 +243,10 @@ func removePeer(ctx context.Context, client *clientv3.Client, name, address stri
 				log.V(1).Info("Removing member from ETCD", "name", member.Name, "id", member.ID, "address", address)
 
 				_, err := client.MemberRemove(ctx, member.ID)
+				if err != nil {
+					log.Error(err, "ETCD member list returned an error")
+				}
+
 				if errors.Is(err, rpctypes.ErrGRPCMemberNotFound) || errors.Is(err, rpctypes.ErrGRPCMemberNotEnoughStarted) {
 					return nil
 				}

@@ -361,6 +361,12 @@ func (c *ClusterReconciler) reconcile(ctx context.Context, cluster *v1beta1.Clus
 // ensureBootstrapSecret will create or update the Secret containing the bootstrap data from the k3s server
 func (c *ClusterReconciler) ensureBootstrapSecret(ctx context.Context, cluster *v1beta1.Cluster, serviceIP, token string) error {
 	log := ctrl.LoggerFrom(ctx)
+
+	if cluster.Spec.Servers == nil || *cluster.Spec.Servers == 0 {
+		log.V(1).Info("Servers are 0: skipping bootstrap secret")
+		return nil
+	}
+
 	log.V(1).Info("Ensuring bootstrap secret")
 
 	bootstrapData, err := bootstrap.GenerateBootstrapData(ctx, cluster, serviceIP, token)
@@ -393,6 +399,12 @@ func (c *ClusterReconciler) ensureBootstrapSecret(ctx context.Context, cluster *
 // ensureKubeconfigSecret will create or update the Secret containing the kubeconfig data from the k3s server
 func (c *ClusterReconciler) ensureKubeconfigSecret(ctx context.Context, cluster *v1beta1.Cluster, serviceIP string, port int) error {
 	log := ctrl.LoggerFrom(ctx)
+
+	if cluster.Spec.Servers == nil || *cluster.Spec.Servers == 0 {
+		log.V(1).Info("Servers are 0: skipping kubeconfig secret")
+		return nil
+	}
+
 	log.V(1).Info("Ensuring Kubeconfig Secret")
 
 	adminKubeconfig := kubeconfig.New()
