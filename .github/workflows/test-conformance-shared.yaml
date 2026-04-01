@@ -111,6 +111,9 @@ jobs:
           expose:
             nodePort:
               serverPort: 30001
+          sync:
+            priorityClasses:
+              enabled: true
         EOF
 
         echo "Wait for bootstrap secret to be available"
