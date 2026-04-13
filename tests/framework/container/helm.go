@@ -6,8 +6,11 @@ import (
 	"path"
 	"time"
 
-	"helm.sh/helm/v3/pkg/action"
-	"helm.sh/helm/v3/pkg/chart/loader"
+	"helm.sh/helm/v4/pkg/action"
+	"helm.sh/helm/v4/pkg/chart"
+	"helm.sh/helm/v4/pkg/chart/loader"
+	"helm.sh/helm/v4/pkg/kube"
+	"helm.sh/helm/v4/pkg/release"
 
 	fwclient "github.com/rancher/k3k/tests/framework/client"
 
@@ -21,7 +24,7 @@ type HelmInstaller struct {
 	Namespace       string
 	ReleaseName     string
 	Timeout         time.Duration
-	Wait            bool
+	Wait            kube.WaitStrategy
 	ControllerImage string
 	KubeletImage    string
 	KubeconfigPath  string
@@ -39,9 +42,7 @@ func (h *HelmInstaller) InstallK3kChart(restClientGetter *fwclient.RESTClientGet
 	// Initialize Helm action configuration
 	helmActionConfig := new(action.Configuration)
 
-	err = helmActionConfig.Init(restClientGetter, h.Namespace, os.Getenv("HELM_DRIVER"), func(format string, v ...any) {
-		GinkgoWriter.Printf("[Helm] "+format+"\n", v...)
-	})
+	err = helmActionConfig.Init(restClientGetter, h.Namespace, os.Getenv("HELM_DRIVER"))
 	Expect(err).To(Not(HaveOccurred()))
 
 	// Create install action
@@ -50,10 +51,16 @@ func (h *HelmInstaller) InstallK3kChart(restClientGetter *fwclient.RESTClientGet
 	iCli.Namespace = h.Namespace
 	iCli.CreateNamespace = true
 	iCli.Timeout = h.Timeout
-	iCli.Wait = h.Wait
+	iCli.WaitStrategy = h.Wait
+
+	// Get chart accessor to modify values
+	chartAccessor, err := chart.NewAccessor(k3kChart)
+	Expect(err).To(Not(HaveOccurred()))
+
+	chartValues := chartAccessor.Values()
 
 	// Configure controller image
-	controllerMap, _ := k3kChart.Values["controller"].(map[string]any)
+	controllerMap, _ := chartValues["controller"].(map[string]any)
 
 	extraEnvArray, _ := controllerMap["extraEnv"].([]map[string]any)
 	extraEnvArray = append(extraEnvArray, map[string]any{
@@ -70,7 +77,7 @@ func (h *HelmInstaller) InstallK3kChart(restClientGetter *fwclient.RESTClientGet
 	})
 
 	// Configure agent image
-	agentMap, _ := k3kChart.Values["agent"].(map[string]any)
+	agentMap, _ := chartValues["agent"].(map[string]any)
 	sharedAgentMap, _ := agentMap["shared"].(map[string]any)
 	sharedAgentImageMap, _ := sharedAgentMap["image"].(map[string]any)
 	maps.Copy(sharedAgentImageMap, map[string]any{
@@ -79,10 +86,13 @@ func (h *HelmInstaller) InstallK3kChart(restClientGetter *fwclient.RESTClientGet
 	})
 
 	// Install chart
-	release, err := iCli.Run(k3kChart, k3kChart.Values)
+	releaseResult, err := iCli.Run(k3kChart, chartValues)
 	Expect(err).To(Not(HaveOccurred()))
 
-	GinkgoWriter.Printf("Helm release '%s' installed in '%s' namespace\n", release.Name, release.Namespace)
+	releaseAccessor, err := release.NewAccessor(releaseResult)
+	Expect(err).To(Not(HaveOccurred()))
+
+	GinkgoWriter.Printf("Helm release '%s' installed in '%s' namespace\n", releaseAccessor.Name(), releaseAccessor.Namespace())
 
 	return helmActionConfig
 }
@@ -97,7 +107,7 @@ func NewHelmInstaller(controllerImage, kubeletImage, kubeconfigPath string) *Hel
 		Namespace:       "k3k-system",
 		ReleaseName:     "k3k",
 		Timeout:         time.Minute,
-		Wait:            true,
+		Wait:            kube.StatusWatcherStrategy,
 		ControllerImage: controllerImage,
 		KubeletImage:    kubeletImage,
 		KubeconfigPath:  kubeconfigPath,
