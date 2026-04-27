@@ -4,6 +4,8 @@ K3k supports syncing resources between virtual clusters and the host cluster to 
 
 **Quick Summary:** K3k implements bidirectional sync. Most resources (Services, ConfigMaps, Secrets, PVCs, Ingresses, PriorityClasses) sync from virtual cluster to host to enable workload execution. StorageClasses sync from host to virtual to share infrastructure resources.
 
+**Important:** The default enabled syncs (Services, ConfigMaps, Secrets, PVCs) are required for most workloads to function correctly. Disabling these should only be done if you know what you're doing and understand the impact on your applications.
+
 For complete API reference, see the [SyncConfig API documentation](./crds/crds.md#syncconfig).
 
 ## Understanding Sync Directions
@@ -113,27 +115,18 @@ provisioner: ebs.csi.aws.com
 
 **What:** Network endpoints for accessing workloads running in the virtual cluster.
 
-**Why enabled by default:** Services are essential for workload networking. When pods from the virtual cluster run on host nodes, the corresponding services must exist on the host for network routing to work correctly.
+**Why enabled by default:** Services are essential for workload networking. When pods from the virtual cluster run on host nodes, the corresponding services must exist on the host for network routing to work correctly. Disabling this will break networking for your workloads.
 
 **Use cases:**
 - ClusterIP services for internal communication
 - LoadBalancer services for external access
 - Headless services for StatefulSets
 
-**Example:**
-```yaml
-# Enable service sync (default)
-spec:
-  sync:
-    services:
-      enabled: true
-```
-
 ### ConfigMaps
 
 **What:** Configuration data consumed by pods.
 
-**Why enabled by default:** Pods reference ConfigMaps for configuration. Since pods run on the host cluster, the ConfigMaps they reference must be available there.
+**Why enabled by default:** Pods reference ConfigMaps for configuration. Since pods run on the host cluster, the ConfigMaps they reference must be available there. Disable only if your applications don't use any ConfigMaps.
 
 **Use cases:**
 - Application configuration files
@@ -154,7 +147,7 @@ spec:
 
 **What:** Sensitive data like credentials, tokens, and certificates.
 
-**Why enabled by default:** Pods reference Secrets for sensitive data. Since pods run on the host cluster, the Secrets they reference must be available there.
+**Why enabled by default:** Pods reference Secrets for sensitive data. Since pods run on the host cluster, the Secrets they reference must be available there. Disable only if your applications don't use any Secrets.
 
 **Security note:** Synced secrets remain within the host namespace boundary. They are not accessible across virtual clusters.
 
@@ -179,7 +172,7 @@ spec:
 
 **What:** Storage requests for persistent data.
 
-**Why enabled by default:** Pods need persistent storage for stateful workloads. PVCs are synced to the host where the actual PersistentVolume binding occurs.
+**Why enabled by default:** Pods need persistent storage for stateful workloads. PVCs are synced to the host where the actual PersistentVolume binding occurs. Disable only if your applications don't use any PersistentVolumeClaims.
 
 **How it works:** 
 1. PVC is created in virtual cluster
@@ -192,49 +185,55 @@ spec:
 - Application file storage
 - StatefulSet volumes
 
-**Example:**
-```yaml
-spec:
-  sync:
-    persistentVolumeClaims:
-      enabled: true
-```
-
 ### Ingresses
 
 **What:** HTTP/HTTPS routing rules for external access.
 
 **Why disabled by default:** Not all virtual clusters need external access. Ingresses are cluster-wide routing rules that should be explicitly enabled.
 
-**Special option - `disableTLSSecretTranslation`:**
-- Default: `false` (TLS secrets referenced by Ingresses ARE automatically synced)
-- Set to `true` to disable automatic TLS secret sync and manually control which secrets are synced
+**TLS Secret Translation:** When you create an Ingress in your virtual cluster, any TLS secrets it references are synced from the virtual cluster to the host with translated names (just like other resources). This is the default behavior (`disableTLSSecretTranslation: false`).
+
+If you want to use a shared TLS secret that already exists on the host cluster (for example, a wildcard certificate used across multiple virtual clusters), you can disable TLS secret translation with `disableTLSSecretTranslation: true`. With this option, the Ingress will reference the secret by its original name on the host, allowing you to use centrally-managed certificates.
 
 **Use cases:**
 - Production workloads that need external HTTP/HTTPS access
 - Custom domain routing
 - TLS termination
 
-**Example - Enable with automatic TLS secret sync:**
+**Example - Default behavior (secrets synced from virtual cluster):**
 ```yaml
 spec:
   sync:
     ingresses:
       enabled: true
-      disableTLSSecretTranslation: false  # Auto-sync TLS secrets (default)
+      disableTLSSecretTranslation: false  # Default: sync TLS secrets from virtual cluster
 ```
 
-**Example - Manual TLS secret control:**
+**Example - Use shared host TLS secret:**
 ```yaml
+# Host cluster has a wildcard certificate
+apiVersion: v1
+kind: Secret
+metadata:
+  name: wildcard-tls-cert
+  namespace: default
+type: kubernetes.io/tls
+data:
+  tls.crt: <cert-data>
+  tls.key: <key-data>
+
+---
+# Virtual cluster Ingress references the shared secret by name
+apiVersion: k3k.io/v1beta1
+kind: Cluster
+metadata:
+  name: my-cluster
+  namespace: default
 spec:
   sync:
     ingresses:
       enabled: true
-      disableTLSSecretTranslation: true  # Don't auto-sync TLS secrets
-    secrets:
-      enabled: true
-      selector:
-        tls-cert: "true"  # Only sync explicitly labeled secrets
+      disableTLSSecretTranslation: true  # Use host secret name directly
 ```
 
 ### PriorityClasses
@@ -268,19 +267,45 @@ spec:
 
 **Why opposite direction?** StorageClasses represent storage infrastructure provided BY the host cluster. Virtual clusters consume these storage options; they don't provide them.
 
+**Important:** When StorageClass sync is enabled, ALL StorageClasses on the host are synced to your virtual cluster by default. Use the `k3k.io/sync-enabled` label on the host to prevent specific StorageClasses from being synced.
+
 **Two-level filtering:**
-1. **Host label:** `k3k.io/sync-enabled` on the host StorageClass
-   - Label not present: Synced to virtual cluster
-   - Label = `"true"`: Synced to virtual cluster
-   - Label = `"false"`: NOT synced to virtual cluster
-2. **Cluster selector:** Further filters which StorageClasses to sync based on labels
+1. **Host label (Optional):** `k3k.io/sync-enabled` on the host StorageClass to control sync
+   - Label not present: StorageClass WILL be synced
+   - Label = `"true"`: StorageClass WILL be synced
+   - Label = `"false"`: StorageClass will NOT be synced (use this to block unwanted StorageClasses)
+2. **Cluster selector (Optional):** Further filters which StorageClasses to sync based on labels
 
 **Use cases:**
 - Multi-tier storage (fast SSD, standard HDD, archive)
 - CSI driver-specific storage
 - Topology-aware storage (zone-specific, region-specific)
 
-**Example - Complete StorageClass sync setup:**
+**Example - Sync all StorageClasses:**
+```yaml
+apiVersion: k3k.io/v1beta1
+kind: Cluster
+metadata:
+  name: my-cluster
+spec:
+  sync:
+    storageClasses:
+      enabled: true  # All host StorageClasses will be synced
+```
+
+**Example - Block a StorageClass from syncing:**
+```yaml
+# On the Host Cluster - prevent this from syncing to virtual clusters
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: admin-only-storage
+  labels:
+    k3k.io/sync-enabled: "false"  # This StorageClass will NOT be synced
+provisioner: custom.csi.driver
+```
+
+**Example - Sync only specific StorageClasses using selector:**
 ```yaml
 # Host StorageClass
 apiVersion: storage.k8s.io/v1
@@ -288,16 +313,11 @@ kind: StorageClass
 metadata:
   name: fast-ssd
   labels:
-    k3k.io/sync-enabled: "true"  # Enable sync for this StorageClass
     tier: premium
-    csi-driver: aws-ebs
 provisioner: ebs.csi.aws.com
-parameters:
-  type: gp3
-  iops: "3000"
 
 ---
-# Cluster configuration
+# Cluster configuration - only sync premium tier
 apiVersion: k3k.io/v1beta1
 kind: Cluster
 metadata:
@@ -308,7 +328,7 @@ spec:
     storageClasses:
       enabled: true
       selector:
-        tier: premium  # Only sync premium storage
+        tier: premium  # Only sync StorageClasses with tier=premium label
 ```
 
 **Result in virtual cluster:**
@@ -318,14 +338,9 @@ kind: StorageClass
 metadata:
   name: fast-ssd  # Same name as host
   labels:
-    k3k.io/sync-enabled: "true"
     k3k.io/sync-source: host  # Indicates sync source
     tier: premium
-    csi-driver: aws-ebs
 provisioner: ebs.csi.aws.com
-parameters:
-  type: gp3
-  iops: "3000"
 ```
 
 ## Configuration
