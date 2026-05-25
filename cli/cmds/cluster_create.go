@@ -87,8 +87,12 @@ func createAction(appCtx *AppContext, config *CreateConfig) func(cmd *cobra.Comm
 			return errors.New("invalid cluster name")
 		}
 
-		if (config.mode == string(v1beta1.SharedClusterMode) || config.mode == string(v1beta1.HCPClusterMode)) && config.agents != 0 {
+		if config.agents > 0 && config.mode != string(v1beta1.VirtualClusterMode) {
 			return errors.New("invalid flag, --agents flag is only allowed in virtual mode")
+		}
+
+		if config.mode == string(v1beta1.HCPClusterMode) {
+			logrus.Warn("HCP (Hosted Control Plane) mode is experimental.")
 		}
 
 		namespace := appCtx.Namespace(name)
@@ -194,8 +198,32 @@ func createAction(appCtx *AppContext, config *CreateConfig) func(cmd *cobra.Comm
 			return err
 		}
 
-		return writeKubeconfigFile(cluster, kubeconfig, "")
+		if err := writeKubeconfigFile(cluster, kubeconfig, ""); err != nil {
+			return err
+		}
+
+		if cluster.Spec.Mode == v1beta1.HCPClusterMode {
+			printHCPJoinInstructions(cluster, kubeconfig)
+		}
+
+		return nil
 	}
+}
+
+func printHCPJoinInstructions(cluster *v1beta1.Cluster, kc *clientcmdapi.Config) {
+	tokenSecretName := k3kcluster.TokenSecretName(cluster.Name)
+	serverURL := kc.Clusters["default"].Server
+
+	logrus.Infof(`To join an external worker node to this HCP cluster:
+
+	1. On this machine, fetch the cluster token:
+
+		kubectl get secret -n %s %s -o jsonpath='{.data.token}' | base64 -d
+
+	2. On the worker node, run (replace <TOKEN> with the value from step 1):
+
+		curl -sfL https://get.k3s.io | K3S_URL=%s K3S_TOKEN=<TOKEN> sh -
+`, cluster.Namespace, tokenSecretName, serverURL)
 }
 
 func newCluster(name, namespace string, config *CreateConfig) (*v1beta1.Cluster, error) {

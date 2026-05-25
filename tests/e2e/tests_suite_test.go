@@ -75,6 +75,8 @@ var _ = BeforeSuite(func() {
 
 	initKubernetesClient(ctx)
 
+	GinkgoWriter.Println("Checking K3k deployment status")
+
 	patchPVC(ctx, k8s)
 })
 
@@ -87,6 +89,8 @@ func initKubernetesClient(ctx context.Context) {
 	restcfg = config.RestConfig
 	k8s = config.Clientset
 	k8sClient = config.Client
+
+	GinkgoWriter.Println("Host IP: " + hostIP)
 }
 
 func patchPVC(ctx context.Context, clientset *kubernetes.Clientset) {
