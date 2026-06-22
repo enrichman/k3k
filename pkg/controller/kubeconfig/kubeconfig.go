@@ -9,8 +9,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	certutil "github.com/rancher/dynamiclistener/cert"
-	corev1 "k8s.io/api/core/v1"
-	networkingv1 "k8s.io/api/networking/v1"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 
 	"github.com/rancher/k3k/pkg/apis/k3k.io/v1beta1"
@@ -56,7 +54,7 @@ func (k *KubeConfig) Generate(ctx context.Context, client client.Client, cluster
 		return nil, err
 	}
 
-	serverURL, _, err := server.ServerURL(ctx, client, cluster, hostServerIP)
+	serverURL, err := server.ServerURL(ctx, client, cluster, hostServerIP)
 	if err != nil {
 		return nil, err
 	}
