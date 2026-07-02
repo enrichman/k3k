@@ -143,7 +143,7 @@ version = 3
 Build a custom image that omits those declarations:
 
 ```dockerfile
-FROM rancher/k3s:v1.35.3-k3s1 AS rancher
+FROM rancher/k3s:v1.36.2-k3s1 AS rancher
 
 FROM scratch
 
