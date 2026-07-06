@@ -14,6 +14,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/rancher/k3k/k3k-kubelet/translate"
 	"github.com/rancher/k3k/pkg/apis/k3k.io/v1beta1"
 	k3kcontroller "github.com/rancher/k3k/pkg/controller"
 	"github.com/rancher/k3k/pkg/controller/policy"
@@ -87,6 +88,13 @@ var _ = Describe("VirtualClusterPolicy Controller", Label("controller"), Label("
 				spec := networkPolicy.Spec
 				Expect(spec.PolicyTypes).To(ContainElement(networkingv1.PolicyTypeEgress))
 				Expect(spec.PolicyTypes).To(ContainElement(networkingv1.PolicyTypeIngress))
+
+				// the policy should only select synced workload pods (which carry the
+				// ClusterNameLabel), leaving the k3k infra pods (kubelet, server) unrestricted
+				Expect(spec.PodSelector.MatchExpressions).To(ConsistOf(metav1.LabelSelectorRequirement{
+					Key:      translate.ClusterNameLabel,
+					Operator: metav1.LabelSelectorOpExists,
+				}))
 
 				// ingress should allow everything
 				Expect(spec.Ingress).To(ConsistOf(networkingv1.NetworkPolicyIngressRule{}))

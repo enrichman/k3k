@@ -14,6 +14,7 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/rancher/k3k/k3k-kubelet/translate"
 	"github.com/rancher/k3k/pkg/apis/k3k.io/v1beta1"
 	k3kcontroller "github.com/rancher/k3k/pkg/controller"
 	"github.com/rancher/k3k/pkg/controller/cluster/server"
@@ -104,6 +105,13 @@ var _ = Describe("Cluster Controller", Label("controller"), Label("Cluster"), fu
 				Expect(spec.PolicyTypes).To(ContainElement(networkingv1.PolicyTypeIngress))
 
 				Expect(spec.Ingress).To(Equal([]networkingv1.NetworkPolicyIngressRule{{}}))
+
+				// the policy should only select synced workload pods, leaving the k3k infra
+				// pods (kubelet, server) unrestricted so they can reach the host API server
+				Expect(spec.PodSelector.MatchExpressions).To(ConsistOf(metav1.LabelSelectorRequirement{
+					Key:      translate.ClusterNameLabel,
+					Operator: metav1.LabelSelectorOpExists,
+				}))
 			})
 
 			When("exposing the cluster with nodePort", func() {

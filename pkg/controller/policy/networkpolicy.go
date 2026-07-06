@@ -11,6 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 
+	"github.com/rancher/k3k/k3k-kubelet/translate"
 	"github.com/rancher/k3k/pkg/apis/k3k.io/v1beta1"
 	k3kcontroller "github.com/rancher/k3k/pkg/controller"
 )
@@ -32,9 +33,17 @@ func (c *VirtualClusterPolicyReconciler) reconcileNetworkPolicy(ctx context.Cont
 		for _, node := range nodeList.Items {
 			if len(node.Spec.PodCIDRs) > 0 {
 				cidrList = append(cidrList, node.Spec.PodCIDRs...)
-			} else {
+			} else if node.Spec.PodCIDR != "" {
 				cidrList = append(cidrList, node.Spec.PodCIDR)
 			}
+		}
+
+		// Some CNIs (e.g. Cilium with cluster-pool IPAM) don't populate node.Spec.PodCIDR.
+		// Without it the egress rule can't exclude the pod network, so cross-cluster pod
+		// isolation would silently not be enforced. Set --cluster-cidr in that case.
+		if len(cidrList) == 0 {
+			log.Info("Could not determine the pod CIDR from the nodes; cross-cluster pod isolation " +
+				"will not be enforced. Set the --cluster-cidr flag on the k3k controller to fix this.")
 		}
 	}
 
@@ -79,6 +88,15 @@ func networkPolicy(namespaceName string, policy *v1beta1.VirtualClusterPolicy, c
 			},
 		},
 		Spec: networkingv1.NetworkPolicySpec{
+			// Isolate synced workload pods
+			PodSelector: metav1.LabelSelector{
+				MatchExpressions: []metav1.LabelSelectorRequirement{
+					{
+						Key:      translate.ClusterNameLabel,
+						Operator: metav1.LabelSelectorOpExists,
+					},
+				},
+			},
 			PolicyTypes: []networkingv1.PolicyType{
 				networkingv1.PolicyTypeIngress,
 				networkingv1.PolicyTypeEgress,
