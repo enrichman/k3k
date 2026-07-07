@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 
@@ -93,6 +94,48 @@ func getServerIP(cfg *rest.Config) (string, error) {
 		return "", fmt.Errorf("failed to parse REST config host: %w", err)
 	}
 
-	// If Host includes a port, u.Hostname() extracts just the hostname part
-	return u.Hostname(), nil
+	host := u.Hostname()
+
+	if isLoopbackHost(host) {
+		if ip, ok := firstNonLoopbackIPv4(); ok {
+			return ip, nil
+		}
+	}
+
+	return host, nil
+}
+
+func isLoopbackHost(host string) bool {
+	if host == "" || host == "localhost" {
+		return true
+	}
+
+	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
+		return true
+	}
+
+	return false
+}
+
+func firstNonLoopbackIPv4() (string, bool) {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return "", false
+	}
+
+	for _, addr := range addrs {
+		ipNet, ok := addr.(*net.IPNet)
+		if !ok {
+			continue
+		}
+
+		ip := ipNet.IP.To4()
+		if ip == nil || ip.IsLoopback() || !ip.IsGlobalUnicast() {
+			continue
+		}
+
+		return ip.String(), true
+	}
+
+	return "", false
 }
