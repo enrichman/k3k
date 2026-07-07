@@ -56,7 +56,7 @@ var validClusterModes = map[v1beta1.ClusterMode]struct{}{
 
 func validateCreateConfig(cfg *CreateConfig) error {
 	if cfg.servers <= 0 {
-		return errors.New("invalid number of servers")
+		return errors.New("invalid number of servers: must be 1 or more")
 	}
 
 	if cfg.persistenceType != "" {

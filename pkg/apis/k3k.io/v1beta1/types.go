@@ -45,7 +45,7 @@ type ClusterSpec struct {
 	// +optional
 	Version string `json:"version,omitempty"`
 
-	// Mode specifies the cluster provisioning mode.
+	// Mode specifies the cluster provisioning mode. This field is immutable.
 	//
 	// +kubebuilder:default=shared
 	// +kubebuilder:validation:Enum=shared;virtual;hcp

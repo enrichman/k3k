@@ -1295,7 +1295,7 @@ spec:
                 type: boolean
               mode:
                 default: shared
-                description: Mode specifies the cluster provisioning mode.
+                description: Mode specifies the cluster provisioning mode. This field is immutable.
                 enum:
                 - shared
                 - virtual

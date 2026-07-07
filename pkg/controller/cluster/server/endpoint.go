@@ -77,7 +77,7 @@ func ServerURL(ctx context.Context, c client.Client, cluster *v1beta1.Cluster, h
 	}
 
 	// init to hostServerIP and 443 port
-	ip := hostServerIP
+	host := hostServerIP
 	port := int32(443)
 
 	// Use service port as default if available
@@ -88,7 +88,7 @@ func ServerURL(ctx context.Context, c client.Client, cluster *v1beta1.Cluster, h
 	// Handle each service type separately
 	switch k3kService.Spec.Type {
 	case corev1.ServiceTypeClusterIP:
-		ip = k3kService.Spec.ClusterIP
+		host = k3kService.Spec.ClusterIP
 
 	case corev1.ServiceTypeNodePort:
 		// Only use NodePort if hostServerIP is NOT the ClusterIP
@@ -99,7 +99,7 @@ func ServerURL(ctx context.Context, c client.Client, cluster *v1beta1.Cluster, h
 			}
 		} else {
 			// Internal connection: use ClusterIP
-			ip = k3kService.Spec.ClusterIP
+			host = k3kService.Spec.ClusterIP
 		}
 
 	case corev1.ServiceTypeLoadBalancer:
@@ -108,40 +108,38 @@ func ServerURL(ctx context.Context, c client.Client, cluster *v1beta1.Cluster, h
 
 			switch {
 			case ingress.IP != "":
-				ip = ingress.IP
+				host = ingress.IP
 			case ingress.Hostname != "":
-				ip = ingress.Hostname
+				host = ingress.Hostname
 			default:
 				log.V(1).Info("No usable ingress address found in LoadBalancer service.")
 			}
 		}
 	}
 
-	if !slices.Contains(cluster.Status.TLSSANs, ip) {
-		log.V(1).Info(fmt.Sprintf("IP %s not in tlsSANs.", ip))
+	if !slices.Contains(cluster.Status.TLSSANs, host) {
+		log.V(1).Info(fmt.Sprintf("IP %s not in tlsSANs.", host))
 
 		if len(cluster.Spec.TLSSANs) > 0 {
 			log.V(1).Info("Using the first TLS SAN in the spec as a fallback: " + cluster.Spec.TLSSANs[0])
 
-			ip = cluster.Spec.TLSSANs[0]
+			host = cluster.Spec.TLSSANs[0]
 		} else if len(cluster.Status.TLSSANs) > 0 {
 			log.V(1).Info("No explicit tlsSANs specified. Trying to use the first TLS SAN in the status: " + cluster.Status.TLSSANs[0])
 
-			ip = cluster.Status.TLSSANs[0]
+			host = cluster.Status.TLSSANs[0]
 		} else {
 			log.V(1).Info("IP not found in tlsSANs. This could cause issue with the certificate validation.")
 		}
 	}
 
 	// Build URL with port only if not the default HTTPS port
-	var rawURL string
 	if port != int32(443) {
-		rawURL = fmt.Sprintf("https://%s", net.JoinHostPort(ip, strconv.Itoa(int(port))))
-	} else {
-		rawURL = fmt.Sprintf("https://%s", ip)
+		host = net.JoinHostPort(host, strconv.Itoa(int(port)))
 	}
 
-	u, err := url.Parse(rawURL)
-
-	return u, err
+	return &url.URL{
+		Scheme: "https",
+		Host:   host,
+	}, nil
 }

@@ -37,7 +37,7 @@ func NewPolicyCreateCmd(appCtx *AppContext) *cobra.Command {
 			case string(v1beta1.VirtualClusterMode), string(v1beta1.SharedClusterMode), string(v1beta1.HCPClusterMode):
 				return nil
 			default:
-				return errors.New(`mode should be one of "shared", "virtual" or "hcp"`)
+				return errors.New(`mode must be one of "shared", "virtual" or "hcp"`)
 			}
 		},
 		RunE: policyCreateAction(appCtx, config),
