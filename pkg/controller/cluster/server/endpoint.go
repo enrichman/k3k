@@ -18,16 +18,7 @@ import (
 	"github.com/rancher/k3k/pkg/apis/k3k.io/v1beta1"
 )
 
-// ServerURL returns the URL at which the K3s API server of a virtual cluster
-// is reachable. The second return value reports whether that URL is routable
-// from outside the host cluster (true for NodePort/LoadBalancer/Ingress, false
-// for plain ClusterIP exposition).
-//
-// hostServerIP is used as the address when the underlying Service is a
-// NodePort. serverPort, when non-zero, overrides the port discovered from the
-// Service.
-// --------------------------------------
-// getURLFromService generates the API server URL for the kubeconfig based on the service configuration.
+// ServerURL generates the API server URL for the kubeconfig based on the service configuration.
 //
 // It handles internal vs external access patterns:
 //   - Internal access (hostServerIP == service.ClusterIP): uses the ClusterIP for direct pod-to-pod communication
@@ -63,8 +54,10 @@ func ServerURL(ctx context.Context, c client.Client, cluster *v1beta1.Cluster, h
 		}
 
 		if len(k3kIngress.Spec.Rules) > 0 && k3kIngress.Spec.Rules[0].Host != "" {
-			u, err := url.Parse(fmt.Sprintf("https://%s", k3kIngress.Spec.Rules[0].Host))
-			return u, err
+			return &url.URL{
+				Scheme: "https",
+				Host:   k3kIngress.Spec.Rules[0].Host,
+			}, nil
 		}
 
 		log.V(1).Info("Ingress has no rule with a host set, falling back to the service URL.")
