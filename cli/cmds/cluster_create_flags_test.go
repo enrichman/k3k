@@ -33,14 +33,14 @@ func Test_validateCreateConfig(t *testing.T) {
 			cfg: CreateConfig{
 				servers: 0,
 			},
-			wantErr: "invalid number of servers",
+			wantErr: "invalid number of servers: must be 1 or more",
 		},
 		{
 			name: "negative servers",
 			cfg: CreateConfig{
 				servers: -1,
 			},
-			wantErr: "invalid number of servers",
+			wantErr: "invalid number of servers: must be 1 or more",
 		},
 		{
 			name: "empty persistence type",
