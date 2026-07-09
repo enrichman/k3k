@@ -114,6 +114,52 @@ var _ = Describe("Cluster Controller", Label("controller"), Label("Cluster"), fu
 				}))
 			})
 
+			When("a host Node advertises a non-default PodCIDR", func() {
+				It("excludes the real PodCIDR from the NetworkPolicy egress, not a hardcoded guess", func() {
+					node := &corev1.Node{
+						ObjectMeta: metav1.ObjectMeta{GenerateName: "node-"},
+						Spec:       corev1.NodeSpec{PodCIDR: "192.168.77.0/24"},
+					}
+
+					Expect(k8sClient.Create(ctx, node)).To(Succeed())
+					DeferCleanup(func() {
+						Expect(k8sClient.Delete(context.Background(), node)).To(Succeed())
+					})
+
+					cluster := &v1beta1.Cluster{
+						ObjectMeta: metav1.ObjectMeta{
+							GenerateName: "cluster-",
+							Namespace:    namespace,
+						},
+					}
+
+					Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
+
+					expectedNetworkPolicy := &networkingv1.NetworkPolicy{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      k3kcontroller.SafeConcatNameWithPrefix(cluster.Name),
+							Namespace: cluster.Namespace,
+						},
+					}
+
+					Eventually(func(g Gomega) {
+						err := k8sClient.Get(ctx, client.ObjectKeyFromObject(expectedNetworkPolicy), expectedNetworkPolicy)
+						g.Expect(err).To(Not(HaveOccurred()))
+
+						egressPeers := expectedNetworkPolicy.Spec.Egress[0].To
+						g.Expect(egressPeers).To(ContainElement(networkingv1.NetworkPolicyPeer{
+							IPBlock: &networkingv1.IPBlock{
+								CIDR:   "0.0.0.0/0",
+								Except: []string{"192.168.77.0/24"},
+							},
+						}))
+					}).
+						WithTimeout(time.Second * 30).
+						WithPolling(time.Second).
+						Should(Succeed())
+				})
+			})
+
 			When("exposing the cluster with nodePort", func() {
 				It("will have a NodePort service", func() {
 					cluster := &v1beta1.Cluster{

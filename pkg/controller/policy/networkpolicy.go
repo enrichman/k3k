@@ -20,31 +20,9 @@ func (c *VirtualClusterPolicyReconciler) reconcileNetworkPolicy(ctx context.Cont
 	log := ctrl.LoggerFrom(ctx)
 	log.V(1).Info("Reconciling NetworkPolicy")
 
-	var cidrList []string
-
-	if c.ClusterCIDR != "" {
-		cidrList = []string{c.ClusterCIDR}
-	} else {
-		var nodeList corev1.NodeList
-		if err := c.Client.List(ctx, &nodeList); err != nil {
-			return err
-		}
-
-		for _, node := range nodeList.Items {
-			if len(node.Spec.PodCIDRs) > 0 {
-				cidrList = append(cidrList, node.Spec.PodCIDRs...)
-			} else if node.Spec.PodCIDR != "" {
-				cidrList = append(cidrList, node.Spec.PodCIDR)
-			}
-		}
-
-		// Some CNIs (e.g. Cilium with cluster-pool IPAM) don't populate node.Spec.PodCIDR.
-		// Without it the egress rule can't exclude the pod network, so cross-cluster pod
-		// isolation would silently not be enforced. Set --cluster-cidr in that case.
-		if len(cidrList) == 0 {
-			log.Info("Could not determine the pod CIDR from the nodes; cross-cluster pod isolation " +
-				"will not be enforced. Set the --cluster-cidr flag on the k3k controller to fix this.")
-		}
+	cidrList, err := FindPodCIDRs(ctx, c.Client, c.ClusterCIDR)
+	if err != nil {
+		return err
 	}
 
 	networkPolicy := networkPolicy(namespace, policy, cidrList)
@@ -63,7 +41,7 @@ func (c *VirtualClusterPolicyReconciler) reconcileNetworkPolicy(ctx context.Cont
 	log.V(1).Info("Creating NetworkPolicy")
 
 	// otherwise try to create/update
-	err := c.Client.Create(ctx, networkPolicy)
+	err = c.Client.Create(ctx, networkPolicy)
 	if apierrors.IsAlreadyExists(err) {
 		log.V(1).Info("NetworkPolicy already exists, updating.")
 
@@ -71,6 +49,44 @@ func (c *VirtualClusterPolicyReconciler) reconcileNetworkPolicy(ctx context.Cont
 	}
 
 	return err
+}
+
+// FindPodCIDRs returns the CIDR ranges to exclude from the isolation NetworkPolicy's egress
+// allow-list, so that pod-to-pod traffic on the host's real pod network is blocked. If clusterCIDR
+// is set (the --cluster-cidr controller flag) it's used as-is; otherwise it's inferred from the
+// host Nodes' Spec.PodCIDR(s). Returns an empty list, and logs a warning, if it can't be
+// determined either way.
+func FindPodCIDRs(ctx context.Context, cl client.Client, clusterCIDR string) ([]string, error) {
+	log := ctrl.LoggerFrom(ctx)
+
+	if clusterCIDR != "" {
+		return []string{clusterCIDR}, nil
+	}
+
+	var nodeList corev1.NodeList
+	if err := cl.List(ctx, &nodeList); err != nil {
+		return nil, err
+	}
+
+	var cidrList []string
+
+	for _, node := range nodeList.Items {
+		if len(node.Spec.PodCIDRs) > 0 {
+			cidrList = append(cidrList, node.Spec.PodCIDRs...)
+		} else if node.Spec.PodCIDR != "" {
+			cidrList = append(cidrList, node.Spec.PodCIDR)
+		}
+	}
+
+	// Some CNIs (e.g. Cilium with cluster-pool IPAM) don't populate node.Spec.PodCIDR.
+	// Without it the egress rule can't exclude the pod network, so cross-cluster pod
+	// isolation would silently not be enforced. Set --cluster-cidr in that case.
+	if len(cidrList) == 0 {
+		log.Info("Could not determine the pod CIDR from the nodes; cross-cluster pod isolation will not be enforced. " +
+			"Set the --cluster-cidr flag on the k3k controller to fix this.")
+	}
+
+	return cidrList, nil
 }
 
 func networkPolicy(namespaceName string, policy *v1beta1.VirtualClusterPolicy, cidrList []string) *networkingv1.NetworkPolicy {

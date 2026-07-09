@@ -338,7 +338,7 @@ var _ = Context("In a shared cluster", Label(e2eTestLabel), Ordered, func() {
 		})
 	})
 
-	FWhen("updating the labels of a synced Pod", func() {
+	When("updating the labels of a synced Pod", func() {
 		var virtualPod *corev1.Pod
 
 		BeforeEach(func() {

@@ -588,6 +588,11 @@ func (c *ClusterReconciler) ensureNetworkPolicy(ctx context.Context, cluster *v1
 		return client.IgnoreNotFound(c.Client.Delete(ctx, netpol))
 	}
 
+	cidrList, err := policy.FindPodCIDRs(ctx, c.Client, c.ClusterCIDR)
+	if err != nil {
+		return err
+	}
+
 	expectedNetworkPolicy := &networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      controller.SafeConcatNameWithPrefix(cluster.Name),
@@ -620,7 +625,7 @@ func (c *ClusterReconciler) ensureNetworkPolicy(ctx context.Context, cluster *v1
 						{
 							IPBlock: &networkingv1.IPBlock{
 								CIDR:   "0.0.0.0/0",
-								Except: []string{cluster.Status.ClusterCIDR},
+								Except: cidrList,
 							},
 						},
 					},
