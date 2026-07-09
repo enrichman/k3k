@@ -188,3 +188,110 @@ jobs:
       with:
         name: e2e-slow-k3k-logs
         path: /tmp/k3k.log
+
+  tests-e2e-multinode:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      with:
+        fetch-depth: 0
+        fetch-tags: true
+
+    - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+      with:
+        go-version-file: go.mod
+
+    - name: Install Ginkgo
+      run: go install github.com/onsi/ginkgo/v2/ginkgo@9ff1646a26f77a4c0d33ddba3e6368c42c0e8842 #v2.32.0
+
+    - name: Setup environment
+      run: |
+        echo "REPO=ttl.sh/$(uuidgen)" >> $GITHUB_ENV
+        echo "VERSION=1h" >> $GITHUB_ENV
+        echo "K3S_HOST_VERSION=${{ env.KUBERNETES_VERSION }}+k3s1" >> $GITHUB_ENV
+
+    - name: Install k3s (host control-plane node)
+      run: |
+        curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=${K3S_HOST_VERSION} INSTALL_K3S_EXEC="--write-kubeconfig-mode=777" sh -s -
+
+        echo "KUBECONFIG=/etc/rancher/k3s/k3s.yaml" >> $GITHUB_ENV
+
+    - name: Read host k3s node token
+      id: k3s-token
+      run: |
+        TOKEN=$(sudo cat /var/lib/rancher/k3s/server/node-token)
+        echo "::add-mask::${TOKEN}"
+        echo "token=${TOKEN}" >> "$GITHUB_OUTPUT"
+
+    - name: Provision worker VMs and join them to the host cluster
+      uses: ./.github/actions/provision-k3s-vm-workers
+      env:
+        K3S_HOST_VERSION: ${{ env.K3S_HOST_VERSION }}
+      with:
+        worker-count: 2
+        k3s-url: https://192.168.100.1:6443
+        k3s-token: ${{ steps.k3s-token.outputs.token }}
+        k3s-version: ${{ env.K3S_HOST_VERSION }}
+
+    - name: Wait for all host nodes to be Ready
+      run: |
+        kubectl get nodes
+
+        timeout 180s bash -c '
+          until [ $(kubectl get nodes --no-headers 2>/dev/null | grep -c "Ready") -eq 3 ]; do
+            echo "Waiting for all 3 nodes to show Ready..."
+            kubectl get nodes || true
+            sleep 5
+          done
+        '
+
+    - name: Build and package and push dev images
+      env:
+        REPO: ${{ env.REPO }}
+        VERSION: ${{ env.VERSION }}
+      run: |
+        make build
+        make package
+        make push
+        make install
+
+    - name: Run e2e tests
+      env:
+        REPO: ${{ env.REPO }}
+        VERSION: ${{ env.VERSION }}
+      run: make test-e2e
+
+    - name: Export logs
+      if: always()
+      run: |
+        journalctl -u k3s -o cat --no-pager > /tmp/k3s.log
+        kubectl logs -n k3k-system -l "app.kubernetes.io/name=k3k" --tail=-1 > /tmp/k3k.log
+
+        for i in 1 2; do
+          IP="192.168.100.1${i}"
+          ssh -i ./id_rsa -o StrictHostKeyChecking=no ubuntu@${IP} \
+            "sudo journalctl -u k3s-agent -o cat --no-pager" > /tmp/worker-${i}.log || true
+        done
+
+    - name: Archive k3s host logs
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      if: always()
+      with:
+        name: e2e-multinode-k3s-logs
+        path: /tmp/k3s.log
+
+    - name: Archive k3k logs
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      if: always()
+      with:
+        name: e2e-multinode-k3k-logs
+        path: /tmp/k3k.log
+
+    - name: Archive worker VM logs
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      if: always()
+      with:
+        name: e2e-multinode-worker-logs
+        path: /tmp/worker-*.log
