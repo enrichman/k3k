@@ -135,6 +135,11 @@ configure_cgroups() {
 EXTRA_ARGS="{{.EXTRA_ARGS}}"
 configure_cgroups
 
+if [ ! -f /etc/machine-id ]; then
+	MACHINE_ID=$(printf '%s' "$POD_NAME" | md5sum | cut -d' ' -f1)
+	printf '%s' "$MACHINE_ID" > /etc/machine-id
+fi
+
 case "{{.CLUSTER_MODE}}" in
     "ha")
         start_ha_node
