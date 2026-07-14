@@ -11,9 +11,12 @@ GINKGO_FLAGS ?= -v -r --coverprofile=cover.out --coverpkg=./...
 ENVTEST_VERSION ?= v0.0.0-20250505003155-b6c5897febe5
 ENVTEST_K8S_VERSION := 1.31.0
 CRD_REF_DOCS_VER ?= v0.2.0
+YAMLLINT_VERSION ?= 1.38.0
 FLAKE_ATTEMPTS ?= 3
 
 GOLANGCI_LINT ?= go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+# yamllint is a Python tool; install it with `pipx install yamllint==$(YAMLLINT_VERSION)` (or pip)
+YAMLLINT ?= yamllint
 GINKGO ?= go run github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION)
 CRD_REF_DOCS := go run github.com/elastic/crd-ref-docs@$(CRD_REF_DOCS_VER)
 PANDOC := $(shell which pandoc 2> /dev/null)
@@ -128,6 +131,10 @@ fmt:	## Format source files in the project
 ifndef CI
 	$(GOLANGCI_LINT) fmt ./...
 endif
+
+.PHONY: lint-yaml
+lint-yaml:	## Lint the GitHub Actions YAML files
+	$(YAMLLINT) .github/
 
 .PHONY: validate
 validate: generate docs fmt ## Validate the project checking for any dependency or doc mismatch

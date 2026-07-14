@@ -1,5 +1,5 @@
 name: 'Provision k3s VM workers'
-description: >
+description: |
   Launches real QEMU/KVM worker VMs on a bridged network and joins them as k3s agents to a given
   k3s server. Used to turn a single-node CI host into a genuine multi-node cluster (unlike
   container-based nodes, e.g. k3d, these are independent kernels/machines).
@@ -25,177 +25,178 @@ inputs:
 
 runs:
   using: 'composite'
+
   steps:
-    - name: Install Virtualization Dependencies
-      shell: bash
-      run: |
-        echo "CIDR_PREFIX=${{ inputs.bridge-cidr-prefix }}" >> "$GITHUB_ENV"
+  - name: Install Virtualization Dependencies
+    shell: bash
+    run: |
+      echo "CIDR_PREFIX=${{ inputs.bridge-cidr-prefix }}" >> "$GITHUB_ENV"
 
-        sudo apt-get update
+      sudo apt-get update
 
-        # Pinned to the versions available on the runner's Ubuntu 24.04 (noble) image at the
-        # time of writing. These come from Ubuntu's regular archive, which does not retain
-        # superseded versions — a routine security update to any of these will make the pin
-        # unresolvable and fail the install below. If that happens, check the versions
-        # currently available (logged on every run) and update the pins to match.
-        echo "Available versions for pinned packages:"
-        apt-cache madison qemu-kvm qemu-utils cloud-image-utils
+      # Pinned to the versions available on the runner's Ubuntu 24.04 (noble) image at the
+      # time of writing. These come from Ubuntu's regular archive, which does not retain
+      # superseded versions — a routine security update to any of these will make the pin
+      # unresolvable and fail the install below. If that happens, check the versions
+      # currently available (logged on every run) and update the pins to match.
+      echo "Available versions for pinned packages:"
+      apt-cache madison qemu-kvm qemu-utils cloud-image-utils
 
-        sudo apt-get install -y \
-          qemu-kvm=1:8.2.2+ds-0ubuntu1.17 \
-          qemu-utils=1:8.2.2+ds-0ubuntu1.17 \
-          cloud-image-utils=0.33-1
-        sudo usermod -aG kvm $USER
+      sudo apt-get install -y \
+        qemu-kvm=1:8.2.2+ds-0ubuntu1.17 \
+        qemu-utils=1:8.2.2+ds-0ubuntu1.17 \
+        cloud-image-utils=0.33-1
+      sudo usermod -aG kvm $USER
 
-        kvm-ok
+      kvm-ok
 
-    - name: Set up bridge network for VMs
-      shell: bash
-      run: |
-        # Create a bridge so both VMs share an L2 segment with unique routable IPs.
-        # Required because QEMU `-net user` gives every VM the same 10.0.2.15 NAT
-        # address, which breaks flannel VXLAN between workers.
-        sudo ip link add name k3kbr0 type bridge
-        sudo ip addr add ${CIDR_PREFIX}.1/24 dev k3kbr0
-        sudo ip link set k3kbr0 up
+  - name: Set up bridge network for VMs
+    shell: bash
+    run: |
+      # Create a bridge so both VMs share an L2 segment with unique routable IPs.
+      # Required because QEMU `-net user` gives every VM the same 10.0.2.15 NAT
+      # address, which breaks flannel VXLAN between workers.
+      sudo ip link add name k3kbr0 type bridge
+      sudo ip addr add ${CIDR_PREFIX}.1/24 dev k3kbr0
+      sudo ip link set k3kbr0 up
 
-        # NAT outbound so VMs can reach the internet (image pulls etc).
-        sudo sysctl -w net.ipv4.ip_forward=1
-        sudo iptables -t nat -A POSTROUTING -s ${CIDR_PREFIX}.0/24 ! -o k3kbr0 -j MASQUERADE
-        sudo iptables -A FORWARD -i k3kbr0 -j ACCEPT
-        sudo iptables -A FORWARD -o k3kbr0 -j ACCEPT
+      # NAT outbound so VMs can reach the internet (image pulls etc).
+      sudo sysctl -w net.ipv4.ip_forward=1
+      sudo iptables -t nat -A POSTROUTING -s ${CIDR_PREFIX}.0/24 ! -o k3kbr0 -j MASQUERADE
+      sudo iptables -A FORWARD -i k3kbr0 -j ACCEPT
+      sudo iptables -A FORWARD -o k3kbr0 -j ACCEPT
 
-        # One TAP per VM, attached to the bridge.
-        for i in $(seq 1 ${{ inputs.worker-count }}); do
-          sudo ip tuntap add tap-w${i} mode tap
-          sudo ip link set tap-w${i} master k3kbr0
-          sudo ip link set tap-w${i} up
-        done
+      # One TAP per VM, attached to the bridge.
+      for i in $(seq 1 ${{ inputs.worker-count }}); do
+        sudo ip tuntap add tap-w${i} mode tap
+        sudo ip link set tap-w${i} master k3kbr0
+        sudo ip link set tap-w${i} up
+      done
 
-    - name: Download Base Cloud Image
-      shell: bash
-      run: |
-        # PINNED TO UBUNTU 24.04 LTS (noble).
-        #
-        # Newer Ubuntu releases (tested: 26.04 "resolute") ship a stricter
-        # `cri-containerd.apparmor.d` profile that denies inter-thread signal
-        # delivery. The BIND ISC library used by `nslookup` relies on those
-        # signals during shutdown (`isc_app_ctxshutdown()` calls `kill()`),
-        # so when AppArmor denies them nslookup exits 139 with
-        # "kill: Permission denied". The conformance tests
-        #   `[sig-network] Services should be able to change the type from
-        #   {NodePort,ClusterIP} to ExternalName`
-        # both run `nslookup` from an exec pod and fail in that case.
-        #
-        # Before bumping past 24.04, verify those two conformance tests still
-        # pass — or that the containerd AppArmor profile on the newer release
-        # has been relaxed to allow intra-pod signals.
-        wget -q https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img -O ubuntu-cloudimg.img
+  - name: Download Base Cloud Image
+    shell: bash
+    run: |
+      # PINNED TO UBUNTU 24.04 LTS (noble).
+      #
+      # Newer Ubuntu releases (tested: 26.04 "resolute") ship a stricter
+      # `cri-containerd.apparmor.d` profile that denies inter-thread signal
+      # delivery. The BIND ISC library used by `nslookup` relies on those
+      # signals during shutdown (`isc_app_ctxshutdown()` calls `kill()`),
+      # so when AppArmor denies them nslookup exits 139 with
+      # "kill: Permission denied". The conformance tests
+      #   `[sig-network] Services should be able to change the type from
+      #   {NodePort,ClusterIP} to ExternalName`
+      # both run `nslookup` from an exec pod and fail in that case.
+      #
+      # Before bumping past 24.04, verify those two conformance tests still
+      # pass — or that the containerd AppArmor profile on the newer release
+      # has been relaxed to allow intra-pod signals.
+      wget -q https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img -O ubuntu-cloudimg.img
 
-    - name: Generate SSH Key and Cloud-Init Seeds
-      shell: bash
-      run: |
-        ssh-keygen -t rsa -b 4096 -f ./id_rsa -N ""
-        PUBKEY="$(cat ./id_rsa.pub)"
+  - name: Generate SSH Key and Cloud-Init Seeds
+    shell: bash
+    run: |
+      ssh-keygen -t rsa -b 4096 -f ./id_rsa -N ""
+      PUBKEY="$(cat ./id_rsa.pub)"
 
-        # Per-VM cloud-init: each worker gets a unique hostname and a static IP
-        # on the bridge subnet via netplan.
-        for i in $(seq 1 ${{ inputs.worker-count }}); do
-          IP="${CIDR_PREFIX}.1${i}"  # e.g. 192.168.100.11 / 192.168.100.12 / ...
-          cat <<EOF > user-data-${i}
-        #cloud-config
-        hostname: worker-${i}
-        preserve_hostname: false
-        manage_etc_hosts: true
-        # Stop cloud-init from generating its own DHCP netplan that would
-        # conflict with the static one we write in write_files below.
-        network:
-          config: disabled
-        users:
-          - name: ubuntu
-            ssh_authorized_keys:
-              - ${PUBKEY}
-            sudo: ['ALL=(ALL) NOPASSWD:ALL']
-            shell: /bin/bash
-        write_files:
-          - path: /etc/netplan/50-static.yaml
-            permissions: '0600'
-            content: |
-              network:
-                version: 2
-                ethernets:
-                  ens3:
-                    dhcp4: false
-                    addresses: [${IP}/24]
-                    routes:
-                      - to: default
-                        via: ${CIDR_PREFIX}.1
-                    nameservers:
-                      addresses: [8.8.8.8, 1.1.1.1]
-        runcmd:
-          - netplan apply
-        EOF
-          cloud-localds seed-${i}.img user-data-${i}
-        done
+      # Per-VM cloud-init: each worker gets a unique hostname and a static IP
+      # on the bridge subnet via netplan.
+      for i in $(seq 1 ${{ inputs.worker-count }}); do
+        IP="${CIDR_PREFIX}.1${i}"  # e.g. 192.168.100.11 / 192.168.100.12 / ...
+        cat <<EOF > user-data-${i}
+      #cloud-config
+      hostname: worker-${i}
+      preserve_hostname: false
+      manage_etc_hosts: true
+      # Stop cloud-init from generating its own DHCP netplan that would
+      # conflict with the static one we write in write_files below.
+      network:
+        config: disabled
+      users:
+        - name: ubuntu
+          ssh_authorized_keys:
+            - ${PUBKEY}
+          sudo: ['ALL=(ALL) NOPASSWD:ALL']
+          shell: /bin/bash
+      write_files:
+        - path: /etc/netplan/50-static.yaml
+          permissions: '0600'
+          content: |
+            network:
+              version: 2
+              ethernets:
+                ens3:
+                  dhcp4: false
+                  addresses: [${IP}/24]
+                  routes:
+                    - to: default
+                      via: ${CIDR_PREFIX}.1
+                  nameservers:
+                    addresses: [8.8.8.8, 1.1.1.1]
+      runcmd:
+        - netplan apply
+      EOF
+        cloud-localds seed-${i}.img user-data-${i}
+      done
 
-    - name: Create Worker Disks
-      shell: bash
-      run: |
-        for i in $(seq 1 ${{ inputs.worker-count }}); do
-          qemu-img create -f qcow2 -b ubuntu-cloudimg.img -F qcow2 worker-${i}.qcow2 20G
-        done
+  - name: Create Worker Disks
+    shell: bash
+    run: |
+      for i in $(seq 1 ${{ inputs.worker-count }}); do
+        qemu-img create -f qcow2 -b ubuntu-cloudimg.img -F qcow2 worker-${i}.qcow2 20G
+      done
 
-    - name: Launch Worker VMs
-      shell: bash
-      run: |
-        for i in $(seq 1 ${{ inputs.worker-count }}); do
-          # Each VM gets a unique MAC, attached to its own tap on k3kbr0.
-          MAC=$(printf '52:54:00:12:34:%02x' $((85 + i)))
+  - name: Launch Worker VMs
+    shell: bash
+    run: |
+      for i in $(seq 1 ${{ inputs.worker-count }}); do
+        # Each VM gets a unique MAC, attached to its own tap on k3kbr0.
+        MAC=$(printf '52:54:00:12:34:%02x' $((85 + i)))
 
-          sudo qemu-system-x86_64 \
-            -m 2048 -smp 2 -cpu host -enable-kvm -nographic \
-            -drive file=worker-${i}.qcow2,if=virtio \
-            -drive file=seed-${i}.img,format=raw,if=virtio \
-            -netdev tap,id=net0,ifname=tap-w${i},script=no,downscript=no \
-            -device virtio-net-pci,netdev=net0,mac=${MAC} \
-            &
+        sudo qemu-system-x86_64 \
+          -m 2048 -smp 2 -cpu host -enable-kvm -nographic \
+          -drive file=worker-${i}.qcow2,if=virtio \
+          -drive file=seed-${i}.img,format=raw,if=virtio \
+          -netdev tap,id=net0,ifname=tap-w${i},script=no,downscript=no \
+          -device virtio-net-pci,netdev=net0,mac=${MAC} \
+          &
 
-          # Wait a moment before launching the next VM
-          sleep 5
-        done
+        # Wait a moment before launching the next VM
+        sleep 5
+      done
 
-    - name: Wait for SSH Availability
-      shell: bash
-      run: |
-        for i in $(seq 1 ${{ inputs.worker-count }}); do
-          IP="${CIDR_PREFIX}.1${i}"
-          echo "Waiting for Worker ${i} (${IP}) to respond..."
-          timeout 180s bash -c "
-            until ssh -i ./id_rsa -o StrictHostKeyChecking=no -o ConnectTimeout=2 ubuntu@${IP} true 2>/dev/null; do sleep 3; done
-          "
-        done
+  - name: Wait for SSH Availability
+    shell: bash
+    run: |
+      for i in $(seq 1 ${{ inputs.worker-count }}); do
+        IP="${CIDR_PREFIX}.1${i}"
+        echo "Waiting for Worker ${i} (${IP}) to respond..."
+        timeout 180s bash -c "
+          until ssh -i ./id_rsa -o StrictHostKeyChecking=no -o ConnectTimeout=2 ubuntu@${IP} true 2>/dev/null; do sleep 3; done
+        "
+      done
 
-        echo "All VMs are up and running!"
+      echo "All VMs are up and running!"
 
-    - name: Verify Worker VM Configuration
-      shell: bash
-      run: |
-        for i in $(seq 1 ${{ inputs.worker-count }}); do
-          IP="${CIDR_PREFIX}.1${i}"
-          echo "=== Worker at ${IP} ==="
-          ssh -i ./id_rsa -o StrictHostKeyChecking=no ubuntu@${IP} \
-            "echo 'Hostname:' \$(hostname) && \
-             echo 'IP Address:' \$(ip -4 addr show ens3 | grep -oP '(?<=inet\s)\d+(\.\d+){3}') && \
-             echo 'Gateway:' \$(ip route | grep default)"
-          echo ""
-        done
+  - name: Verify Worker VM Configuration
+    shell: bash
+    run: |
+      for i in $(seq 1 ${{ inputs.worker-count }}); do
+        IP="${CIDR_PREFIX}.1${i}"
+        echo "=== Worker at ${IP} ==="
+        ssh -i ./id_rsa -o StrictHostKeyChecking=no ubuntu@${IP} \
+          "echo 'Hostname:' \$(hostname) && \
+           echo 'IP Address:' \$(ip -4 addr show ens3 | grep -oP '(?<=inet\s)\d+(\.\d+){3}') && \
+           echo 'Gateway:' \$(ip route | grep default)"
+        echo ""
+      done
 
-    - name: Join Workers to K3s Cluster
-      shell: bash
-      run: |
-        for i in $(seq 1 ${{ inputs.worker-count }}); do
-          IP="${CIDR_PREFIX}.1${i}"
-          echo "Registering Worker ${i} (k3s ${{ inputs.k3s-version }})..."
-          ssh -i ./id_rsa -o StrictHostKeyChecking=no ubuntu@${IP} \
-            "curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=${{ inputs.k3s-version }} K3S_URL=${{ inputs.k3s-url }} K3S_TOKEN=${{ inputs.k3s-token }} sh -"
-        done
+  - name: Join Workers to K3s Cluster
+    shell: bash
+    run: |
+      for i in $(seq 1 ${{ inputs.worker-count }}); do
+        IP="${CIDR_PREFIX}.1${i}"
+        echo "Registering Worker ${i} (k3s ${{ inputs.k3s-version }})..."
+        ssh -i ./id_rsa -o StrictHostKeyChecking=no ubuntu@${IP} \
+          "curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=${{ inputs.k3s-version }} K3S_URL=${{ inputs.k3s-url }} K3S_TOKEN=${{ inputs.k3s-token }} sh -"
+      done

@@ -1,0 +1,24 @@
+# yamllint config for the GitHub Actions YAML files (see `make lint-yaml`).
+extends: default
+
+rules:
+  # GitHub Actions workflows don't use an explicit document start.
+  document-start: disable
+
+  # Workflows have long lines (SHA-pinned actions, shell commands); don't enforce.
+  line-length: disable
+
+  # Allow the workflow trigger key `on:` without a "truthy" warning.
+  truthy:
+    check-keys: false
+
+  # Inline SHA pins are written as `uses: action@sha # v1` (one space before #).
+  comments:
+    min-spaces-from-content: 1
+
+  # Enforce the repo's indentless sequence style:
+  #   steps:
+  #   - name: ...
+  indentation:
+    spaces: 2
+    indent-sequences: false

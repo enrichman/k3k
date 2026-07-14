@@ -14,28 +14,33 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+    - name: Checkout code
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
-      - name: Set up Go
-        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
-        with:
-          go-version-file: go.mod
-          cache: true
+    - name: Set up Go
+      uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+      with:
+        go-version-file: go.mod
+        cache: true
 
-      - name: Install Pandoc
-        run: sudo apt-get install pandoc
+    - name: Install Pandoc
+      run: sudo apt-get install pandoc
 
-      - name: Run linters
-        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
-        with:
-          version: v2.12.2
-          args: -v
-          only-new-issues: true
-          skip-cache: false
+    - name: Run linters
+      uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+      with:
+        version: v2.12.2
+        args: -v
+        only-new-issues: true
+        skip-cache: false
 
-      - name: Run formatters
-        run: golangci-lint -v fmt ./...
+    - name: Run formatters
+      run: golangci-lint -v fmt ./...
 
-      - name: Validate
-        run: make validate
+    - name: Lint YAML
+      run: |
+        pipx install yamllint==1.38.0
+        make lint-yaml
+
+    - name: Validate
+      run: make validate

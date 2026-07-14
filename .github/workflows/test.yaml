@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-    contents: read
+  contents: read
 
 env:
   KUBERNETES_VERSION: v1.36.2
@@ -50,12 +50,12 @@ jobs:
         go-version-file: go.mod
 
     - name: Install Ginkgo
-      run: go install github.com/onsi/ginkgo/v2/ginkgo@9ff1646a26f77a4c0d33ddba3e6368c42c0e8842 #v2.32.0
-    
+      run: go install github.com/onsi/ginkgo/v2/ginkgo@9ff1646a26f77a4c0d33ddba3e6368c42c0e8842 # v2.32.0
+
     - name: Setup environment
       run: |
         mkdir ${{ github.workspace }}/covdata
-        
+
         echo "COVERAGE=true" >> $GITHUB_ENV
         echo "GOCOVERDIR=${{ github.workspace }}/covdata" >> $GITHUB_ENV
         echo "REPO=ttl.sh/$(uuidgen)" >> $GITHUB_ENV
