@@ -11,9 +11,9 @@ on:
         description: Checkout a specific commit
 
 permissions:
-    contents: write
-    packages: write
-    id-token: write
+  contents: write
+  packages: write
+  id-token: write
 
 env:
   GORELEASER_VERSION: v2.15.2
