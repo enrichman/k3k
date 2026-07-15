@@ -51,11 +51,11 @@ func (c *VirtualClusterPolicyReconciler) reconcileNetworkPolicy(ctx context.Cont
 	return err
 }
 
-// FindPodCIDRs returns the CIDR ranges to exclude from the isolation NetworkPolicy's egress
-// allow-list, so that pod-to-pod traffic on the host's real pod network is blocked. If clusterCIDR
-// is set (the --cluster-cidr controller flag) it's used as-is; otherwise it's inferred from the
-// host Nodes' Spec.PodCIDR(s). Returns an empty list, and logs a warning, if it can't be
-// determined either way.
+// FindPodCIDRs returns the CIDR ranges to exclude from the isolation NetworkPolicy's egress allow-list,
+// so that pod-to-pod traffic on the host's real pod network is blocked.
+// If clusterCIDR is set (the --cluster-cidr controller flag) it's used as-is;
+// otherwise it's inferred from the host Nodes' Spec.PodCIDR(s).
+// Returns an empty list, and logs a warning, if it can't be determined either way.
 func FindPodCIDRs(ctx context.Context, cl client.Client, clusterCIDR string) ([]string, error) {
 	log := ctrl.LoggerFrom(ctx)
 
@@ -78,7 +78,12 @@ func FindPodCIDRs(ctx context.Context, cl client.Client, clusterCIDR string) ([]
 		}
 	}
 
-	// Some CNIs (e.g. Cilium with cluster-pool IPAM) don't populate node.Spec.PodCIDR.
+	// node.Spec.PodCIDR is only populated when kube-controller-manager runs with --allocate-node-cidrs.
+	// K3s and RKE2 enable it by default (cluster-cidr 10.42.0.0/16),
+	// so the field is populated there regardless of CNI.
+	// Some setups don't set it, i.e. Cilium with cluster-pool IPAM (Cilium's default),
+	// which manages per-node CIDRs in the v2.CiliumNode CRD and doesn't need Kubernetes to hand out PodCIDRs.
+	// See https://docs.cilium.io/en/stable/network/concepts/ipam/cluster-pool/
 	// Without it the egress rule can't exclude the pod network, so cross-cluster pod
 	// isolation would silently not be enforced. Set --cluster-cidr in that case.
 	if len(cidrList) == 0 {
