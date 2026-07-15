@@ -2,6 +2,7 @@ package policy
 
 import (
 	"context"
+	"sort"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -77,6 +78,8 @@ func FindPodCIDRs(ctx context.Context, cl client.Client, clusterCIDR string) ([]
 			cidrList = append(cidrList, node.Spec.PodCIDR)
 		}
 	}
+
+	sort.Strings(cidrList)
 
 	// node.Spec.PodCIDR is only populated when kube-controller-manager runs with --allocate-node-cidrs.
 	// K3s and RKE2 enable it by default (cluster-cidr 10.42.0.0/16),
