@@ -1,10 +1,15 @@
 package provider
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
+	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -299,4 +304,104 @@ func Test_configureEnv(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+// TestGetPods_ScopedToAgent pins the behavior that GetPods returns only the Pods synced by this
+// k3k-kubelet agent, identified by the AgentNameLabel and scoped to this cluster's host namespace.
+// Pods synced by another agent, or living in another namespace, are excluded. Pods are returned
+// regardless of whether their virtual counterpart still exists, so the virtual-kubelet startup
+// reconciliation can still clean up genuine orphans.
+func TestGetPods_ScopedToAgent(t *testing.T) {
+	const (
+		clusterName      = "c-test"
+		clusterNamespace = "ns-test"
+		agentName        = "node-a"
+	)
+
+	// host Pods carry the tracking metadata TranslateFrom reads to recover the virtual identity,
+	// plus the AgentNameLabel recording which agent synced them.
+	newHostPod := func(name, agent, namespace string) *corev1.Pod {
+		return &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+				Labels: map[string]string{
+					translate.ClusterNameLabel: clusterName,
+					translate.AgentNameLabel:   agent,
+				},
+				Annotations: map[string]string{
+					translate.ResourceNameAnnotation:      name,
+					translate.ResourceNamespaceAnnotation: "default",
+				},
+			},
+		}
+	}
+
+	scheme := runtime.NewScheme()
+	require.NoError(t, corev1.AddToScheme(scheme))
+
+	hostClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(
+			newHostPod("a1", agentName, clusterNamespace), // synced by this agent -> returned
+			newHostPod("b1", "node-b", clusterNamespace),  // synced by another agent -> excluded
+			newHostPod("d1", agentName, "ns-other"),       // another namespace -> excluded
+		).
+		Build()
+
+	p := Provider{
+		Host: ClusterContext{Client: hostClient},
+		Translator: translate.ToHostTranslator{
+			ClusterName:      clusterName,
+			ClusterNamespace: clusterNamespace,
+		},
+		ClusterName:      clusterName,
+		ClusterNamespace: clusterNamespace,
+		agentHostname:    agentName,
+		logger:           logr.Discard(),
+	}
+
+	pods, err := p.GetPods(context.Background())
+	require.NoError(t, err)
+
+	names := map[string]bool{}
+	for _, pod := range pods {
+		names[pod.Name] = true
+	}
+
+	// only a1 (synced by this agent, in this namespace) is returned.
+	assert.Equal(t, map[string]bool{"a1": true}, names)
+}
+
+func TestUpdateMetadata(t *testing.T) {
+	hostPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "host-pod",
+			Namespace: "ns-test",
+			Labels: map[string]string{
+				translate.ClusterNameLabel: "c-test",
+				translate.AgentNameLabel:   "node-a",
+				"app":                      "nginx",
+			},
+			Annotations: map[string]string{
+				translate.ResourceNameAnnotation:      "my-pod",
+				translate.ResourceNamespaceAnnotation: "default",
+			},
+		},
+	}
+
+	virtualPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "my-pod",
+			Namespace: "default",
+			Labels:    map[string]string{"app": "nginx"},
+		},
+	}
+
+	updateMetadata(hostPod, virtualPod)
+
+	assert.Equal(t, "c-test", hostPod.Labels[translate.ClusterNameLabel])
+	assert.Equal(t, "node-a", hostPod.Labels[translate.AgentNameLabel])
+	assert.Equal(t, "my-pod", hostPod.Annotations[translate.ResourceNameAnnotation])
+	assert.Equal(t, "default", hostPod.Annotations[translate.ResourceNamespaceAnnotation])
 }

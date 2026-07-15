@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"strconv"
 	"strings"
@@ -15,8 +16,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/virtual-kubelet/virtual-kubelet/node/api"
 	"github.com/virtual-kubelet/virtual-kubelet/node/nodeutil"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -411,6 +410,9 @@ func (p *Provider) createPod(ctx context.Context, pod *corev1.Pod) error {
 	hostPod := virtualPod.DeepCopy()
 	p.Translator.TranslateTo(hostPod)
 
+	// record which k3k-kubelet agent synced this Pod, so GetPods can scope to this agent's own Pods
+	hostPod.Labels[translate.AgentNameLabel] = p.agentHostname
+
 	logger = logger.WithValues("pod", hostPod.Name)
 
 	// Clear the NodeName to allow scheduling, and set affinity to prefer scheduling the Pod on the same host node as the virtual kubelet,
@@ -673,11 +675,33 @@ func updatePod(dst, src *corev1.Pod) {
 	updateContainerImages(dst.Spec.Containers, src.Spec.Containers)
 	updateContainerImages(dst.Spec.InitContainers, src.Spec.InitContainers)
 
+	updateMetadata(dst, src)
+
 	dst.Spec.ActiveDeadlineSeconds = src.Spec.ActiveDeadlineSeconds
 	dst.Spec.Tolerations = src.Spec.Tolerations
+}
 
-	dst.Annotations = src.Annotations
-	dst.Labels = src.Labels
+// updateMetadata copies the labels and annotations from src (the virtual Pod) onto dst (the host Pod),
+// while preserving the k3k metadata (labels and annotations with the "k3k.io/*" prefix)
+func updateMetadata(dst, src *corev1.Pod) {
+	dst.Labels = mergeManagedMetadata(dst.Labels, src.Labels)
+	dst.Annotations = mergeManagedMetadata(dst.Annotations, src.Annotations)
+}
+
+// mergeManagedMetadata returns a new map with all the entries from src (the virtual object),
+// plus the k3k metadata (keys with the translate.MetadataPrefix) carried over from dst (the host object).
+func mergeManagedMetadata(dst, src map[string]string) map[string]string {
+	merged := make(map[string]string, len(src))
+
+	maps.Copy(merged, src)
+
+	for key, value := range dst {
+		if strings.HasPrefix(key, translate.MetadataPrefix) {
+			merged[key] = value
+		}
+	}
+
+	return merged
 }
 
 // updateContainerImages will update the images of the original container images with the same name
@@ -782,32 +806,31 @@ func (p *Provider) getPodFromHostCluster(ctx context.Context, hostPodName string
 // The Pods returned are expected to be immutable, and may be accessed
 // concurrently outside of the calling goroutine. Therefore it is recommended
 // to return a version after DeepCopy.
+//
+// It returns only the Pods synced by this k3k-kubelet agent, identified by the AgentNameLabel.
 func (p *Provider) GetPods(ctx context.Context) ([]*corev1.Pod, error) {
 	p.logger.V(1).Info("GetPods")
 
-	selector := labels.NewSelector()
+	var hostPods corev1.PodList
 
-	requirement, err := labels.NewRequirement(translate.ClusterNameLabel, selection.Equals, []string{p.ClusterName})
-	if err != nil {
-		p.logger.Error(err, "Error creating label selector for GetPods")
-		return nil, err
+	listOpts := []client.ListOption{
+		client.InNamespace(p.ClusterNamespace),
+		client.MatchingLabels{
+			translate.ClusterNameLabel: p.ClusterName,
+			translate.AgentNameLabel:   p.agentHostname,
+		},
 	}
 
-	selector = selector.Add(*requirement)
-
-	var podList corev1.PodList
-
-	err = p.Host.Client.List(ctx, &podList, &client.ListOptions{LabelSelector: selector})
-	if err != nil {
+	if err := p.Host.Client.List(ctx, &hostPods, listOpts...); err != nil {
 		p.logger.Error(err, "Error listing pods from host cluster")
 		return nil, err
 	}
 
-	retPods := []*corev1.Pod{}
+	retPods := make([]*corev1.Pod, 0, len(hostPods.Items))
 
-	for _, pod := range podList.DeepCopy().Items {
-		p.Translator.TranslateFrom(&pod)
-		retPods = append(retPods, &pod)
+	for _, hostPod := range hostPods.DeepCopy().Items {
+		p.Translator.TranslateFrom(&hostPod)
+		retPods = append(retPods, &hostPod)
 	}
 
 	return retPods, nil
