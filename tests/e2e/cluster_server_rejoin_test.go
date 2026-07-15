@@ -75,30 +75,15 @@ var _ = FWhen("a persistent HA server rejoins after a scale down and up",
 			By("Scaling up the servers from 1 back to 3")
 			// The recreated ordinals re-mount their old PVC, whose etcd data
 			// references a member that was already removed. k3s then logs
-			// "...please restart k3s to rejoin the cluster" and stays degraded;
-			// the liveness probe must restart the pod so k3s can rejoin.
+			// "...please restart k3s to rejoin the cluster" and stays degraded
+			// without exiting. Because the StatefulSet is OrderedReady, a stuck
+			// server blocks the whole scale-up: only the liveness-probe restart
+			// lets k3s rejoin so the StatefulSet can progress to all 3 servers.
 			scaleServers(3)
 
-			By("Verifying the liveness probe restarts a recreated server")
-			Eventually(func(g Gomega) {
-				serverPods := listServerPods(ctx, virtualCluster)
-				g.Expect(serverPods).To(HaveLen(3))
-
-				restarted := 0
-
-				for _, serverPod := range serverPods {
-					if len(serverPod.Status.ContainerStatuses) > 0 && serverPod.Status.ContainerStatuses[0].RestartCount > 0 {
-						restarted++
-					}
-				}
-
-				g.Expect(restarted).To(BeNumerically(">=", 1))
-			}).
-				WithTimeout(time.Minute * 5).
-				WithPolling(time.Second * 5).
-				Should(Succeed())
-
-			By("Verifying all servers recover to Ready")
+			By("Waiting for all servers to recover to Ready")
+			// Recovery is two sequential rejoin+restart cycles (server-1 then
+			// server-2), so give it a generous timeout.
 			Eventually(func(g Gomega) {
 				serverPods := listServerPods(ctx, virtualCluster)
 				g.Expect(serverPods).To(HaveLen(3))
@@ -109,8 +94,21 @@ var _ = FWhen("a persistent HA server rejoins after a scale down and up",
 					g.Expect(cond.Status).To(BeEquivalentTo(corev1.ConditionTrue))
 				}
 			}).
-				WithTimeout(time.Minute * 5).
+				WithTimeout(time.Minute * 10).
 				WithPolling(time.Second * 10).
 				Should(Succeed())
+
+			By("Verifying the recovery happened via a liveness-probe restart")
+			// If k3s exited on its own the container would restart without the
+			// probe; since it hangs on the rejoin message, a RestartCount > 0
+			// proves the probe is what unblocked the recovery.
+			var totalRestarts int32
+			for _, serverPod := range listServerPods(ctx, virtualCluster) {
+				if len(serverPod.Status.ContainerStatuses) > 0 {
+					totalRestarts += serverPod.Status.ContainerStatuses[0].RestartCount
+				}
+			}
+
+			Expect(totalRestarts).To(BeNumerically(">=", 1))
 		})
 	})
