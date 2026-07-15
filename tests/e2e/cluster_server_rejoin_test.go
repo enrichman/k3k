@@ -7,6 +7,7 @@ import (
 	"k8s.io/kubernetes/pkg/api/v1/pod"
 
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/rancher/k3k/pkg/apis/k3k.io/v1beta1"
@@ -19,7 +20,10 @@ import (
 // FWhen focuses this spec so it can be run in isolation (`make test-e2e`).
 // Remove the leading F before merging so the full suite runs it.
 var _ = FWhen("a persistent HA server rejoins after a scale down and up",
-	Label(e2eTestLabel), Label(updateTestsLabel), Label(slowTestsLabel), func() {
+	// FlakeAttempts(1) overrides the suite-wide --flake-attempts for this spec:
+	// it is slow (creates a fresh HA cluster in BeforeEach), so retrying the
+	// whole thing on failure is very expensive and not worth it here.
+	FlakeAttempts(1), Label(e2eTestLabel), Label(updateTestsLabel), Label(slowTestsLabel), func() {
 		var virtualCluster *VirtualCluster
 
 		ctx := context.Background()
@@ -29,6 +33,16 @@ var _ = FWhen("a persistent HA server rejoins after a scale down and up",
 
 			DeferCleanup(func() {
 				fwk3k.DeleteNamespaces(k8s, namespace.Name)
+			})
+
+			// On failure, dump each server pod's status and the tail of its k3s
+			// output so we can see *why* it was stuck (e.g. the "rejoin the
+			// cluster" message). Registered after the namespace cleanup so it
+			// runs first (DeferCleanup is LIFO), before the namespace is deleted.
+			DeferCleanup(func() {
+				if CurrentSpecReport().Failed() {
+					dumpServerDiagnostics(ctx, namespace.Name)
+				}
 			})
 
 			cluster := NewCluster(namespace.Name)
@@ -68,7 +82,7 @@ var _ = FWhen("a persistent HA server rejoins after a scale down and up",
 			Eventually(func(g Gomega) {
 				g.Expect(listServerPods(ctx, virtualCluster)).To(HaveLen(1))
 			}).
-				WithTimeout(time.Minute * 3).
+				WithTimeout(time.Minute * 2).
 				WithPolling(time.Second * 5).
 				Should(Succeed())
 
@@ -94,7 +108,7 @@ var _ = FWhen("a persistent HA server rejoins after a scale down and up",
 					g.Expect(cond.Status).To(BeEquivalentTo(corev1.ConditionTrue))
 				}
 			}).
-				WithTimeout(time.Minute * 10).
+				WithTimeout(time.Minute * 5).
 				WithPolling(time.Second * 10).
 				Should(Succeed())
 
@@ -112,3 +126,41 @@ var _ = FWhen("a persistent HA server rejoins after a scale down and up",
 			Expect(totalRestarts).To(BeNumerically(">=", 1))
 		})
 	})
+
+// dumpServerDiagnostics logs the status and the tail of the k3s output of every
+// server pod in the namespace. Used on failure to reveal why a server is stuck.
+func dumpServerDiagnostics(ctx context.Context, namespace string) {
+	GinkgoWriter.Println("=== server pod diagnostics for namespace " + namespace + " ===")
+
+	serverPods, err := k8s.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: "role=server"})
+	if err != nil {
+		GinkgoWriter.Printf("failed to list server pods: %v\n", err)
+		return
+	}
+
+	tailLines := int64(40)
+
+	for i := range serverPods.Items {
+		serverPod := serverPods.Items[i]
+
+		restarts := int32(-1)
+		if len(serverPod.Status.ContainerStatuses) > 0 {
+			restarts = serverPod.Status.ContainerStatuses[0].RestartCount
+		}
+
+		ready := "unknown"
+		if _, cond := pod.GetPodCondition(&serverPod.Status, corev1.PodReady); cond != nil {
+			ready = string(cond.Status)
+		}
+
+		GinkgoWriter.Printf("pod=%s phase=%s ready=%s restarts=%d\n", serverPod.Name, serverPod.Status.Phase, ready, restarts)
+
+		logs, err := k8s.CoreV1().Pods(namespace).GetLogs(serverPod.Name, &corev1.PodLogOptions{TailLines: &tailLines}).DoRaw(ctx)
+		if err != nil {
+			GinkgoWriter.Printf("  <logs unavailable: %v>\n", err)
+			continue
+		}
+
+		GinkgoWriter.Printf("  --- last %d log lines ---\n%s\n", tailLines, string(logs))
+	}
+}
