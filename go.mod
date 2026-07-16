@@ -2,6 +2,8 @@ module github.com/rancher/k3k
 
 go 1.26.5
 
+replace github.com/rancher/k3k/pkg/apis => ./pkg/apis
+
 require (
 	github.com/blang/semver/v4 v4.0.0
 	github.com/go-logr/logr v1.4.3
@@ -10,6 +12,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.32.0
 	github.com/onsi/gomega v1.42.1
 	github.com/rancher/dynamiclistener v1.27.5
+	github.com/rancher/k3k/pkg/apis v0.0.0-00010101000000-000000000000
 	github.com/sirupsen/logrus v1.9.4
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
