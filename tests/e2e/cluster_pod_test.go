@@ -341,9 +341,7 @@ var _ = Context("In a shared cluster", Label(e2eTestLabel), Ordered, func() {
 	When("updating the labels of a synced Pod", func() {
 		var virtualPod *corev1.Pod
 
-		BeforeEach(func() {
-			ctx := context.Background()
-
+		BeforeEach(func(ctx context.Context) {
 			p := &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					GenerateName: "nginx-",
@@ -363,9 +361,7 @@ var _ = Context("In a shared cluster", Label(e2eTestLabel), Ordered, func() {
 			Expect(err).To(Not(HaveOccurred()))
 		})
 
-		It("should keep the clusterName isolation label on the host Pod", func() {
-			ctx := context.Background()
-
+		It("should keep the clusterName isolation label on the host Pod", func(ctx context.Context) {
 			hostPodName := translator.NamespacedName(virtualPod)
 
 			By("Checking the host Pod carries the clusterName isolation label")

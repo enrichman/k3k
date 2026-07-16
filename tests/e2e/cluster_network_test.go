@@ -101,9 +101,7 @@ var _ = When("two virtual clusters are installed", Label(e2eTestLabel), Label(ne
 		Expect(stdout).To(Not(ContainSubstring("Welcome to nginx!")))
 	})
 
-	It("excludes the real host pod CIDR from the isolation NetworkPolicy, not a hardcoded guess", func() {
-		ctx := context.Background()
-
+	It("excludes the real host pod CIDR from the isolation NetworkPolicy, not a hardcoded guess", func(ctx context.Context) {
 		// compute the same value the controller should have derived from the live host
 		// Nodes, so this assertion doesn't rely on the host's real pod CIDR coincidentally
 		// matching a hardcoded constant
