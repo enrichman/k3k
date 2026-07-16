@@ -9,7 +9,6 @@ package policy_test
 // 3. Can't-determine fallback: returns an empty list (fail-open) when neither is available.
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
