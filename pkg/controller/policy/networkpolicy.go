@@ -2,8 +2,8 @@ package policy
 
 import (
 	"context"
-	"sort"
 
+	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	corev1 "k8s.io/api/core/v1"
@@ -69,17 +69,17 @@ func FindPodCIDRs(ctx context.Context, cl client.Client, clusterCIDR string) ([]
 		return nil, err
 	}
 
-	var cidrList []string
+	cidrs := sets.New[string]()
 
 	for _, node := range nodeList.Items {
-		if len(node.Spec.PodCIDRs) > 0 {
-			cidrList = append(cidrList, node.Spec.PodCIDRs...)
-		} else if node.Spec.PodCIDR != "" {
-			cidrList = append(cidrList, node.Spec.PodCIDR)
+		cidrs.Insert(node.Spec.PodCIDRs...)
+
+		if node.Spec.PodCIDR != "" {
+			cidrs.Insert(node.Spec.PodCIDR)
 		}
 	}
 
-	sort.Strings(cidrList)
+	cidrList := sets.List(cidrs)
 
 	// node.Spec.PodCIDR is only populated when kube-controller-manager runs with --allocate-node-cidrs.
 	// K3s and RKE2 enable it by default (cluster-cidr 10.42.0.0/16),
