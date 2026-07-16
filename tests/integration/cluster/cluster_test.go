@@ -14,6 +14,7 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/rancher/k3k/k3k-kubelet/translate"
 	"github.com/rancher/k3k/pkg/apis/k3k.io/v1beta1"
 	k3kcontroller "github.com/rancher/k3k/pkg/controller"
 	"github.com/rancher/k3k/pkg/controller/cluster/server"
@@ -104,6 +105,59 @@ var _ = Describe("Cluster Controller", Label("controller"), Label("Cluster"), fu
 				Expect(spec.PolicyTypes).To(ContainElement(networkingv1.PolicyTypeIngress))
 
 				Expect(spec.Ingress).To(Equal([]networkingv1.NetworkPolicyIngressRule{{}}))
+
+				// the policy should only select synced workload pods, leaving the k3k infra
+				// pods (kubelet, server) unrestricted so they can reach the host API server
+				Expect(spec.PodSelector.MatchExpressions).To(ConsistOf(metav1.LabelSelectorRequirement{
+					Key:      translate.ClusterNameLabel,
+					Operator: metav1.LabelSelectorOpExists,
+				}))
+			})
+
+			When("a host Node advertises a non-default PodCIDR", func() {
+				It("excludes the real PodCIDR from the NetworkPolicy egress, not a hardcoded guess", func() {
+					node := &corev1.Node{
+						ObjectMeta: metav1.ObjectMeta{GenerateName: "node-"},
+						Spec:       corev1.NodeSpec{PodCIDR: "192.168.77.0/24"},
+					}
+
+					Expect(k8sClient.Create(ctx, node)).To(Succeed())
+					DeferCleanup(func() {
+						Expect(k8sClient.Delete(context.Background(), node)).To(Succeed())
+					})
+
+					cluster := &v1beta1.Cluster{
+						ObjectMeta: metav1.ObjectMeta{
+							GenerateName: "cluster-",
+							Namespace:    namespace,
+						},
+					}
+
+					Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
+
+					expectedNetworkPolicy := &networkingv1.NetworkPolicy{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      k3kcontroller.SafeConcatNameWithPrefix(cluster.Name),
+							Namespace: cluster.Namespace,
+						},
+					}
+
+					Eventually(func(g Gomega) {
+						err := k8sClient.Get(ctx, client.ObjectKeyFromObject(expectedNetworkPolicy), expectedNetworkPolicy)
+						g.Expect(err).To(Not(HaveOccurred()))
+
+						egressPeers := expectedNetworkPolicy.Spec.Egress[0].To
+						g.Expect(egressPeers).To(ContainElement(networkingv1.NetworkPolicyPeer{
+							IPBlock: &networkingv1.IPBlock{
+								CIDR:   "0.0.0.0/0",
+								Except: []string{"192.168.77.0/24"},
+							},
+						}))
+					}).
+						WithTimeout(time.Second * 30).
+						WithPolling(time.Second).
+						Should(Succeed())
+				})
 			})
 
 			When("exposing the cluster with nodePort", func() {

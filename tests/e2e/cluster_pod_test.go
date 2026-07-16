@@ -338,6 +338,76 @@ var _ = Context("In a shared cluster", Label(e2eTestLabel), Ordered, func() {
 		})
 	})
 
+	When("updating the labels of a synced Pod", func() {
+		var virtualPod *corev1.Pod
+
+		BeforeEach(func(ctx context.Context) {
+			p := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: "nginx-",
+					Namespace:    "default",
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{
+						Name:  "nginx",
+						Image: "nginx",
+					}},
+				},
+			}
+
+			var err error
+
+			virtualPod, err = virtualCluster.Client.CoreV1().Pods(p.Namespace).Create(ctx, p, metav1.CreateOptions{})
+			Expect(err).To(Not(HaveOccurred()))
+		})
+
+		It("should keep the clusterName isolation label on the host Pod", func(ctx context.Context) {
+			hostPodName := translator.NamespacedName(virtualPod)
+
+			By("Checking the host Pod carries the clusterName isolation label")
+
+			Eventually(func(g Gomega) {
+				hostPod, err := k8s.CoreV1().Pods(hostPodName.Namespace).Get(ctx, hostPodName.Name, metav1.GetOptions{})
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(hostPod.Labels).To(HaveKeyWithValue(translate.ClusterNameLabel, virtualCluster.Cluster.Name))
+			}).
+				WithPolling(time.Second).
+				WithTimeout(time.Minute).
+				Should(Succeed())
+
+			By("Updating a label on the virtual Pod")
+
+			var err error
+
+			virtualPod, err = virtualCluster.Client.CoreV1().Pods(virtualPod.Namespace).Get(ctx, virtualPod.Name, metav1.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			if virtualPod.Labels == nil {
+				virtualPod.Labels = map[string]string{}
+			}
+
+			virtualPod.Labels["k3k.io/test"] = "updated"
+
+			virtualPod, err = virtualCluster.Client.CoreV1().Pods(virtualPod.Namespace).Update(ctx, virtualPod, metav1.UpdateOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Checking the host Pod still carries the clusterName isolation label after the update")
+
+			// The label must survive the update: it is what the isolation NetworkPolicy selects on
+			// (podSelector matchExpressions: clusterName Exists). If it is dropped, the synced
+			// workload pod escapes isolation.
+			Eventually(func(g Gomega) {
+				hostPod, err := k8s.CoreV1().Pods(hostPodName.Namespace).Get(ctx, hostPodName.Name, metav1.GetOptions{})
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(hostPod.Labels).To(HaveKeyWithValue("k3k.io/test", "updated"))
+				g.Expect(hostPod.Labels).To(HaveKeyWithValue(translate.ClusterNameLabel, virtualCluster.Cluster.Name))
+			}).
+				WithPolling(time.Second).
+				WithTimeout(time.Minute).
+				Should(Succeed())
+		})
+	})
+
 	When("creating a Pod with downward API variables in environment variable", func() {
 		var virtualPod *corev1.Pod
 

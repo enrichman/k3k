@@ -3,6 +3,7 @@ package policy
 import (
 	"context"
 
+	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	corev1 "k8s.io/api/core/v1"
@@ -11,6 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 
+	"github.com/rancher/k3k/k3k-kubelet/translate"
 	"github.com/rancher/k3k/pkg/apis/k3k.io/v1beta1"
 	k3kcontroller "github.com/rancher/k3k/pkg/controller"
 )
@@ -19,23 +21,9 @@ func (c *VirtualClusterPolicyReconciler) reconcileNetworkPolicy(ctx context.Cont
 	log := ctrl.LoggerFrom(ctx)
 	log.V(1).Info("Reconciling NetworkPolicy")
 
-	var cidrList []string
-
-	if c.ClusterCIDR != "" {
-		cidrList = []string{c.ClusterCIDR}
-	} else {
-		var nodeList corev1.NodeList
-		if err := c.Client.List(ctx, &nodeList); err != nil {
-			return err
-		}
-
-		for _, node := range nodeList.Items {
-			if len(node.Spec.PodCIDRs) > 0 {
-				cidrList = append(cidrList, node.Spec.PodCIDRs...)
-			} else {
-				cidrList = append(cidrList, node.Spec.PodCIDR)
-			}
-		}
+	cidrList, err := FindPodCIDRs(ctx, c.Client, c.ClusterCIDR)
+	if err != nil {
+		return err
 	}
 
 	networkPolicy := networkPolicy(namespace, policy, cidrList)
@@ -54,7 +42,7 @@ func (c *VirtualClusterPolicyReconciler) reconcileNetworkPolicy(ctx context.Cont
 	log.V(1).Info("Creating NetworkPolicy")
 
 	// otherwise try to create/update
-	err := c.Client.Create(ctx, networkPolicy)
+	err = c.Client.Create(ctx, networkPolicy)
 	if apierrors.IsAlreadyExists(err) {
 		log.V(1).Info("NetworkPolicy already exists, updating.")
 
@@ -62,6 +50,51 @@ func (c *VirtualClusterPolicyReconciler) reconcileNetworkPolicy(ctx context.Cont
 	}
 
 	return err
+}
+
+// FindPodCIDRs returns the CIDR ranges to exclude from the isolation NetworkPolicy's egress allow-list,
+// so that pod-to-pod traffic on the host's real pod network is blocked.
+// If clusterCIDR is set (the --cluster-cidr controller flag) it's used as-is;
+// otherwise it's inferred from the host Nodes' Spec.PodCIDR(s).
+// Returns an empty list, and logs a warning, if it can't be determined either way.
+func FindPodCIDRs(ctx context.Context, cl client.Client, clusterCIDR string) ([]string, error) {
+	log := ctrl.LoggerFrom(ctx)
+
+	if clusterCIDR != "" {
+		return []string{clusterCIDR}, nil
+	}
+
+	var nodeList corev1.NodeList
+	if err := cl.List(ctx, &nodeList); err != nil {
+		return nil, err
+	}
+
+	cidrs := sets.New[string]()
+
+	for _, node := range nodeList.Items {
+		cidrs.Insert(node.Spec.PodCIDRs...)
+
+		if node.Spec.PodCIDR != "" {
+			cidrs.Insert(node.Spec.PodCIDR)
+		}
+	}
+
+	cidrList := sets.List(cidrs)
+
+	// node.Spec.PodCIDR is only populated when kube-controller-manager runs with --allocate-node-cidrs.
+	// K3s and RKE2 enable it by default (cluster-cidr 10.42.0.0/16),
+	// so the field is populated there regardless of CNI.
+	// Some setups don't set it, i.e. Cilium with cluster-pool IPAM (Cilium's default),
+	// which manages per-node CIDRs in the v2.CiliumNode CRD and doesn't need Kubernetes to hand out PodCIDRs.
+	// See https://docs.cilium.io/en/stable/network/concepts/ipam/cluster-pool/
+	// Without it the egress rule can't exclude the pod network, so cross-cluster pod
+	// isolation would silently not be enforced. Set --cluster-cidr in that case.
+	if len(cidrList) == 0 {
+		log.Info("Could not determine the pod CIDR from the nodes; cross-cluster pod isolation will not be enforced. " +
+			"Set the --cluster-cidr flag on the k3k controller to fix this.")
+	}
+
+	return cidrList, nil
 }
 
 func networkPolicy(namespaceName string, policy *v1beta1.VirtualClusterPolicy, cidrList []string) *networkingv1.NetworkPolicy {
@@ -79,6 +112,15 @@ func networkPolicy(namespaceName string, policy *v1beta1.VirtualClusterPolicy, c
 			},
 		},
 		Spec: networkingv1.NetworkPolicySpec{
+			// Isolate synced workload pods
+			PodSelector: metav1.LabelSelector{
+				MatchExpressions: []metav1.LabelSelectorRequirement{
+					{
+						Key:      translate.ClusterNameLabel,
+						Operator: metav1.LabelSelectorOpExists,
+					},
+				},
+			},
 			PolicyTypes: []networkingv1.PolicyType{
 				networkingv1.PolicyTypeIngress,
 				networkingv1.PolicyTypeEgress,

@@ -1,6 +1,14 @@
 package k3k_test
 
 import (
+	"context"
+
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	networkingv1 "k8s.io/api/networking/v1"
+
+	k3kcontroller "github.com/rancher/k3k/pkg/controller"
+	"github.com/rancher/k3k/pkg/controller/policy"
 	fwk3k "github.com/rancher/k3k/tests/framework/k3k"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -91,5 +99,32 @@ var _ = When("two virtual clusters are installed", Label(e2eTestLabel), Label(ne
 		stdout, _, err = cluster2.ExecCmd(pod1Cluster2, curlCmd)
 		Expect(err).To(HaveOccurred())
 		Expect(stdout).To(Not(ContainSubstring("Welcome to nginx!")))
+	})
+
+	It("excludes the real host pod CIDR from the isolation NetworkPolicy, not a hardcoded guess", func(ctx context.Context) {
+		// compute the same value the controller should have derived from the live host
+		// Nodes, so this assertion doesn't rely on the host's real pod CIDR coincidentally
+		// matching a hardcoded constant
+		expectedCIDRs, err := policy.FindPodCIDRs(ctx, k8sClient, "")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(expectedCIDRs).NotTo(BeEmpty())
+
+		for _, vc := range []*VirtualCluster{cluster1, cluster2} {
+			var networkPolicy networkingv1.NetworkPolicy
+
+			key := client.ObjectKey{
+				Name:      k3kcontroller.SafeConcatNameWithPrefix(vc.Cluster.Name),
+				Namespace: vc.Cluster.Namespace,
+			}
+
+			Expect(k8sClient.Get(ctx, key, &networkPolicy)).To(Succeed())
+
+			Expect(networkPolicy.Spec.Egress[0].To).To(ContainElement(networkingv1.NetworkPolicyPeer{
+				IPBlock: &networkingv1.IPBlock{
+					CIDR:   "0.0.0.0/0",
+					Except: expectedCIDRs,
+				},
+			}))
+		}
 	})
 })
