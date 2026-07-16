@@ -34,7 +34,7 @@ func TestFindPodCIDRs_ClusterCIDROverride(t *testing.T) {
 
 	cl := createFakeClient(t, node)
 
-	cidrs, err := policy.FindPodCIDRs(context.Background(), cl, "10.42.0.0/16")
+	cidrs, err := policy.FindPodCIDRs(t.Context(), cl, "10.42.0.0/16")
 	require.NoError(t, err)
 	assert.Equal(t, []string{"10.42.0.0/16"}, cidrs)
 }
@@ -47,7 +47,7 @@ func TestFindPodCIDRs_FromNodePodCIDR(t *testing.T) {
 
 	cl := createFakeClient(t, node)
 
-	cidrs, err := policy.FindPodCIDRs(context.Background(), cl, "")
+	cidrs, err := policy.FindPodCIDRs(t.Context(), cl, "")
 	require.NoError(t, err)
 	assert.Equal(t, []string{"192.168.77.0/24"}, cidrs)
 }
@@ -60,7 +60,7 @@ func TestFindPodCIDRs_FromNodePodCIDRs(t *testing.T) {
 
 	cl := createFakeClient(t, node)
 
-	cidrs, err := policy.FindPodCIDRs(context.Background(), cl, "")
+	cidrs, err := policy.FindPodCIDRs(t.Context(), cl, "")
 	require.NoError(t, err)
 	assert.Equal(t, []string{"192.168.77.0/24", "fd00:1::/64"}, cidrs)
 }
@@ -77,7 +77,7 @@ func TestFindPodCIDRs_MultipleNodes(t *testing.T) {
 
 	cl := createFakeClient(t, node1, node2)
 
-	cidrs, err := policy.FindPodCIDRs(context.Background(), cl, "")
+	cidrs, err := policy.FindPodCIDRs(t.Context(), cl, "")
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []string{"192.168.77.0/24", "192.168.78.0/24"}, cidrs)
 }
@@ -91,7 +91,7 @@ func TestFindPodCIDRs_CannotDetermine(t *testing.T) {
 
 	cl := createFakeClient(t, node)
 
-	cidrs, err := policy.FindPodCIDRs(context.Background(), cl, "")
+	cidrs, err := policy.FindPodCIDRs(t.Context(), cl, "")
 	require.NoError(t, err)
 	assert.Empty(t, cidrs)
 }
