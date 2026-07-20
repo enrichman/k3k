@@ -70,7 +70,7 @@ func NewClusterCreateCmd(appCtx *AppContext) *cobra.Command {
 		Args: cobra.ExactArgs(1),
 	}
 
-	CobraFlagNamespace(appCtx, cmd.Flags())
+	CobraFlagNamespace(appCtx, cmd, completeNamespaces(appCtx))
 
 	createFlags(cmd, createConfig)
 

@@ -93,8 +93,12 @@ func (ctx *AppContext) Namespace(name string) string {
 	return "k3k-" + name
 }
 
-func CobraFlagNamespace(appCtx *AppContext, flag *pflag.FlagSet) {
-	flag.StringVarP(&appCtx.namespace, "namespace", "n", "", "namespace of the k3k cluster")
+func CobraFlagNamespace(appCtx *AppContext, cmd *cobra.Command, completeFn cobra.CompletionFunc) {
+	cmd.Flags().StringVarP(&appCtx.namespace, "namespace", "n", "", "namespace of the k3k cluster")
+
+	if completeFn != nil {
+		mustRegisterFlagCompletion(cmd, "namespace", completeFn)
+	}
 }
 
 func InitializeConfig(cmd *cobra.Command) {
