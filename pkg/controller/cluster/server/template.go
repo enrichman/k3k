@@ -16,9 +16,9 @@ fatal()
 # reports it must rejoin the cluster, so the probe can restart the pod.
 REJOIN_MARKER=/var/log/k3s-rejoin
 
-# run_k3s starts the k3s server, streams its output to stdout (so "kubectl logs"
-# keeps working) and drops the sentinel file when the "rejoin the cluster"
-# message appears. This replaces piping the full log to a growing file that the
+# run_k3s starts the k3s server, streams its output to stdout ("kubectl logs" keeps working)
+# and drops the sentinel file when the "rejoin the cluster" message appears.
+# This replaces piping the full log to a growing file that the
 # liveness probe used to grep on every check (see rancher/k3k#537).
 run_k3s() {
 	rm -f "$REJOIN_MARKER"
