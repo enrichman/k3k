@@ -48,7 +48,7 @@ safe_mode() {
 	if [ -d "{{.ETCD_DIR}}" ]; then
 
 		info "Starting K3s in Safe Mode (Network Policy Disabled) to patch Node IP from ${CURRENT_IP} to ${POD_IP}"
-		/bin/k3s server --disable-network-policy --config $1 $EXTRA_ARGS > /dev/null 2>&1 &
+		run_k3s --disable-network-policy --config $1 $EXTRA_ARGS > /dev/null 2>&1 &
 		PID=$!
 
 		# Start the loop to wait for the nodeIP to change
@@ -79,7 +79,7 @@ start_single_node() {
 	if [ -d "{{.ETCD_DIR}}" ]; then
 		info "Existing data found in single node setup. Performing cluster-reset to ensure quorum..."
 
-		if ! /bin/k3s server --cluster-reset --config {{.INIT_CONFIG}} $EXTRA_ARGS > /dev/null 2>&1; then
+		if ! run_k3s --cluster-reset --config {{.INIT_CONFIG}} $EXTRA_ARGS > /dev/null 2>&1; then
 			fatal "cluster reset failed!"
 		fi
 		info "Cluster reset complete. Removing Reset flag file."
