@@ -29,6 +29,7 @@ import (
 	"github.com/rancher/k3k/pkg/apis/k3k.io/v1beta1"
 	"github.com/rancher/k3k/pkg/controller"
 	k3kcluster "github.com/rancher/k3k/pkg/controller/cluster"
+	"github.com/rancher/k3k/pkg/controller/cluster/server"
 )
 
 type CreateConfig struct {
@@ -196,6 +197,15 @@ func createAction(appCtx *AppContext, config *CreateConfig) func(cmd *cobra.Comm
 			return err
 		}); err != nil {
 			return err
+		}
+
+		serverURL, err := server.ServerURL(ctx, client, cluster, host)
+		if err != nil {
+			return err
+		}
+
+		for _, kubeCluster := range kubeconfig.Clusters {
+			kubeCluster.Server = serverURL.String()
 		}
 
 		if err := writeKubeconfigFile(cluster, kubeconfig, ""); err != nil {
