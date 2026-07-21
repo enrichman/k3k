@@ -6,6 +6,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	corev1 "k8s.io/api/core/v1"
@@ -58,9 +59,18 @@ func completeNamespaces(appCtx *AppContext) cobra.CompletionFunc {
 			return nil, cobra.ShellCompDirectiveError
 		}
 
-		names := make([]string, 0, len(namespaces.Items))
+		// Exclude already selected namespaces
+		selected := sets.New[string]()
+		if vals, err := cmd.Flags().GetStringSlice("namespace"); err == nil {
+			selected.Insert(vals...)
+		}
+
+		names := []string{}
+
 		for _, ns := range namespaces.Items {
-			names = append(names, ns.Name)
+			if !selected.Has(ns.Name) {
+				names = append(names, ns.Name)
+			}
 		}
 
 		return names, cobra.ShellCompDirectiveNoFileComp
@@ -82,19 +92,12 @@ func completeClusterNamespaces(appCtx *AppContext) cobra.CompletionFunc {
 			return nil, cobra.ShellCompDirectiveError
 		}
 
-		seen := make(map[string]struct{})
-		names := make([]string, 0)
-
+		namespaces := sets.New[string]()
 		for _, cluster := range clusters.Items {
-			if _, ok := seen[cluster.Namespace]; ok {
-				continue
-			}
-
-			seen[cluster.Namespace] = struct{}{}
-			names = append(names, cluster.Namespace)
+			namespaces.Insert(cluster.Namespace)
 		}
 
-		return names, cobra.ShellCompDirectiveNoFileComp
+		return sets.List(namespaces), cobra.ShellCompDirectiveNoFileComp
 	}
 }
 

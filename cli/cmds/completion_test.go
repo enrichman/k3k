@@ -54,6 +54,29 @@ func Test_completeNamespaces(t *testing.T) {
 	assert.ElementsMatch(t, []string{"default", "k3k-foo", "k3k-bar"}, names)
 }
 
+func Test_completeNamespaces_excludesSelected(t *testing.T) {
+	fakeClient := fake.NewClientBuilder().
+		WithScheme(completionTestScheme(t)).
+		WithObjects(
+			namespace("default"),
+			namespace("k3k-foo"),
+			namespace("k3k-bar"),
+		).
+		Build()
+
+	appCtx := &AppContext{Client: fakeClient}
+
+	cmd := &cobra.Command{}
+	cmd.Flags().StringSlice("namespace", nil, "")
+	assert.NoError(t, cmd.Flags().Set("namespace", "k3k-foo"))
+
+	names, directive := completeNamespaces(appCtx)(cmd, nil, "")
+
+	assert.Equal(t, cobra.ShellCompDirectiveNoFileComp, directive)
+	// already-selected "k3k-foo" is filtered out
+	assert.ElementsMatch(t, []string{"default", "k3k-bar"}, names)
+}
+
 func Test_completeClusterNamespaces(t *testing.T) {
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(completionTestScheme(t)).
