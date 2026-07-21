@@ -30,75 +30,66 @@ var completePersistenceMode = cobra.FixedCompletions(
 	cobra.ShellCompDirectiveNoFileComp,
 )
 
-// completionClient builds a Kubernetes client for use inside completion
-// functions. Cobra does not run PersistentPreRunE during shell completion, so
-// appCtx.Client is usually nil here and we have to build the client ourselves.
-func completionClient(appCtx *AppContext) (client.Client, error) {
-	if appCtx.Client != nil {
-		return appCtx.Client, nil
-	}
-
-	restConfig, err := loadRESTConfig(appCtx.Kubeconfig)
+// completeNamespaces is a cobra.CompletionFunc that completes with every namespace in the host cluster.
+func completeNamespaces(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	client, err := completionClient(cmd)
 	if err != nil {
-		return nil, err
+		return nil, cobra.ShellCompDirectiveError
 	}
 
-	return buildClient(restConfig)
+	return namespaceCompletions(cmd, client)
 }
 
-// completeNamespaces completes with every namespace in the host cluster.
-func completeNamespaces(appCtx *AppContext) cobra.CompletionFunc {
-	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		cl, err := completionClient(appCtx)
-		if err != nil {
-			return nil, cobra.ShellCompDirectiveError
-		}
-
-		var namespaces corev1.NamespaceList
-		if err := cl.List(context.Background(), &namespaces); err != nil {
-			return nil, cobra.ShellCompDirectiveError
-		}
-
-		// Exclude already selected namespaces
-		selected := sets.New[string]()
-		if vals, err := cmd.Flags().GetStringSlice("namespace"); err == nil {
-			selected.Insert(vals...)
-		}
-
-		names := []string{}
-
-		for _, ns := range namespaces.Items {
-			if !selected.Has(ns.Name) {
-				names = append(names, ns.Name)
-			}
-		}
-
-		return names, cobra.ShellCompDirectiveNoFileComp
+// namespaceCompletions lists every namespace in the host cluster, excluding any
+// already provided to the command's "namespace" flag.
+func namespaceCompletions(cmd *cobra.Command, cl client.Client) ([]string, cobra.ShellCompDirective) {
+	var namespaces corev1.NamespaceList
+	if err := cl.List(context.Background(), &namespaces); err != nil {
+		return nil, cobra.ShellCompDirectiveError
 	}
+
+	// Exclude already selected namespaces
+	selected := sets.New[string]()
+	if vals, err := cmd.Flags().GetStringSlice("namespace"); err == nil {
+		selected.Insert(vals...)
+	}
+
+	names := []string{}
+
+	for _, ns := range namespaces.Items {
+		if !selected.Has(ns.Name) {
+			names = append(names, ns.Name)
+		}
+	}
+
+	return names, cobra.ShellCompDirectiveNoFileComp
 }
 
-// completeClusterNamespaces completes with the unique namespaces that contain at
-// least one k3k Cluster, which is the relevant set when acting on an existing
-// cluster (delete, list, update, kubeconfig).
-func completeClusterNamespaces(appCtx *AppContext) cobra.CompletionFunc {
-	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		cl, err := completionClient(appCtx)
-		if err != nil {
-			return nil, cobra.ShellCompDirectiveError
-		}
-
-		var clusters v1beta1.ClusterList
-		if err := cl.List(context.Background(), &clusters); err != nil {
-			return nil, cobra.ShellCompDirectiveError
-		}
-
-		namespaces := sets.New[string]()
-		for _, cluster := range clusters.Items {
-			namespaces.Insert(cluster.Namespace)
-		}
-
-		return sets.List(namespaces), cobra.ShellCompDirectiveNoFileComp
+// completeClusterNamespaces is a cobra.CompletionFunc that completes with the namespaces
+// with a k3k virtual cluster in it.
+func completeClusterNamespaces(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	client, err := completionClient(cmd)
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveError
 	}
+
+	return clusterNamespaceCompletions(client)
+}
+
+// clusterNamespaceCompletions lists the unique namespaces that contain at least
+// one k3k Cluster.
+func clusterNamespaceCompletions(cl client.Client) ([]string, cobra.ShellCompDirective) {
+	var clusters v1beta1.ClusterList
+	if err := cl.List(context.Background(), &clusters); err != nil {
+		return nil, cobra.ShellCompDirectiveError
+	}
+
+	namespaces := sets.New[string]()
+	for _, cluster := range clusters.Items {
+		namespaces.Insert(cluster.Namespace)
+	}
+
+	return sets.List(namespaces), cobra.ShellCompDirectiveNoFileComp
 }
 
 // mustRegisterFlagCompletion registers a completion function for a flag and
@@ -142,4 +133,25 @@ func disableFileCompletion(cmd *cobra.Command) {
 	for _, sub := range cmd.Commands() {
 		disableFileCompletion(sub)
 	}
+}
+
+// completionClient builds a Kubernetes client for use inside completion functions.
+// It checks if the kubeconfig flag is set, to point to the right cluster.
+func completionClient(cmd *cobra.Command) (client.Client, error) {
+	kubeconfig, err := cmd.Flags().GetString("kubeconfig")
+	if err != nil {
+		return nil, err
+	}
+
+	restConfig, err := loadRESTConfig(kubeconfig, completionRequestTimeout)
+	if err != nil {
+		return nil, err
+	}
+
+	client, err := buildClient(restConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	return client, nil
 }

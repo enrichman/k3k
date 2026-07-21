@@ -46,9 +46,7 @@ func Test_completeNamespaces(t *testing.T) {
 		).
 		Build()
 
-	appCtx := &AppContext{Client: fakeClient}
-
-	names, directive := completeNamespaces(appCtx)(&cobra.Command{}, nil, "")
+	names, directive := namespaceCompletions(&cobra.Command{}, fakeClient)
 
 	assert.Equal(t, cobra.ShellCompDirectiveNoFileComp, directive)
 	assert.ElementsMatch(t, []string{"default", "k3k-foo", "k3k-bar"}, names)
@@ -64,13 +62,11 @@ func Test_completeNamespaces_excludesSelected(t *testing.T) {
 		).
 		Build()
 
-	appCtx := &AppContext{Client: fakeClient}
-
 	cmd := &cobra.Command{}
 	cmd.Flags().StringSlice("namespace", nil, "")
 	assert.NoError(t, cmd.Flags().Set("namespace", "k3k-foo"))
 
-	names, directive := completeNamespaces(appCtx)(cmd, nil, "")
+	names, directive := namespaceCompletions(cmd, fakeClient)
 
 	assert.Equal(t, cobra.ShellCompDirectiveNoFileComp, directive)
 	// already-selected "k3k-foo" is filtered out
@@ -91,9 +87,7 @@ func Test_completeClusterNamespaces(t *testing.T) {
 		).
 		Build()
 
-	appCtx := &AppContext{Client: fakeClient}
-
-	names, directive := completeClusterNamespaces(appCtx)(&cobra.Command{}, nil, "")
+	names, directive := clusterNamespaceCompletions(fakeClient)
 
 	assert.Equal(t, cobra.ShellCompDirectiveNoFileComp, directive)
 	// only namespaces that contain a cluster, deduplicated; "default" is excluded

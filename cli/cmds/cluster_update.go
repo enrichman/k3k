@@ -40,7 +40,8 @@ func NewClusterUpdateCmd(appCtx *AppContext) *cobra.Command {
 		Args:    cobra.ExactArgs(1),
 	}
 
-	CobraFlagNamespace(appCtx, cmd, completeClusterNamespaces(appCtx))
+	CobraFlagNamespace(appCtx, cmd, completeClusterNamespaces)
+
 	updateFlags(cmd, updateConfig)
 
 	return cmd

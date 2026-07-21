@@ -29,8 +29,9 @@ func NewClusterDeleteCmd(appCtx *AppContext) *cobra.Command {
 		Args:    cobra.ExactArgs(1),
 	}
 
-	CobraFlagNamespace(appCtx, cmd, completeClusterNamespaces(appCtx))
 	cmd.Flags().BoolVar(&keepData, "keep-data", false, "keeps persistence volumes created for the cluster after deletion")
+
+	CobraFlagNamespace(appCtx, cmd, completeClusterNamespaces)
 
 	return cmd
 }

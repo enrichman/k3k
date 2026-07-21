@@ -56,7 +56,8 @@ func NewKubeconfigGenerateCmd(appCtx *AppContext) *cobra.Command {
 		Args:  cobra.NoArgs,
 	}
 
-	CobraFlagNamespace(appCtx, cmd, completeClusterNamespaces(appCtx))
+	CobraFlagNamespace(appCtx, cmd, completeClusterNamespaces)
+
 	generateKubeconfigFlags(cmd, cfg)
 
 	return cmd
