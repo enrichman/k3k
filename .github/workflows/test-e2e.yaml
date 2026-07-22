@@ -21,10 +21,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
-        - name: update
-          label-filter: "e2e && update"
+        - name: update-config
+          label-filter: "e2e && update && config"
+        - name: update-version
+          label-filter: "e2e && update && upgrade"
+        - name: update-scaling
+          label-filter: "e2e && update && scaling"
         - name: lifecycle
-          label-filter: "e2e && (lifecycle || kubelet || persistence)"
+          label-filter: "e2e && (lifecycle || kubelet)"
+        - name: persistence
+          label-filter: "e2e && persistence"
         - name: sync
           label-filter: "e2e && (pod || app || sync || policy || status)"
         - name: features

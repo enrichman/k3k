@@ -19,7 +19,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = When("a shared mode cluster update its envs", Label(e2eTestLabel), Label(updateTestsLabel), Label(slowTestsLabel), func() {
+var _ = When("a shared mode cluster update its envs", Label(e2eTestLabel), Label(updateTestsLabel), Label(configTestsLabel), Label(slowTestsLabel), func() {
 	var virtualCluster *VirtualCluster
 
 	ctx := context.Background()
@@ -175,7 +175,7 @@ var _ = When("a shared mode cluster update its envs", Label(e2eTestLabel), Label
 	})
 })
 
-var _ = When("a shared mode cluster update its server args", Label(e2eTestLabel), Label(updateTestsLabel), Label(slowTestsLabel), func() {
+var _ = When("a shared mode cluster update its server args", Label(e2eTestLabel), Label(updateTestsLabel), Label(configTestsLabel), Label(slowTestsLabel), func() {
 	var virtualCluster *VirtualCluster
 
 	ctx := context.Background()
@@ -241,7 +241,7 @@ var _ = When("a shared mode cluster update its server args", Label(e2eTestLabel)
 	})
 })
 
-var _ = When("a virtual mode cluster update its envs", Label(e2eTestLabel), Label(updateTestsLabel), Label(slowTestsLabel), func() {
+var _ = When("a virtual mode cluster update its envs", Label(e2eTestLabel), Label(updateTestsLabel), Label(configTestsLabel), Label(slowTestsLabel), func() {
 	var virtualCluster *VirtualCluster
 
 	ctx := context.Background()
@@ -394,7 +394,7 @@ var _ = When("a virtual mode cluster update its envs", Label(e2eTestLabel), Labe
 	})
 })
 
-var _ = When("a virtual mode cluster update its server args", Label(e2eTestLabel), Label(updateTestsLabel), Label(slowTestsLabel), func() {
+var _ = When("a virtual mode cluster update its server args", Label(e2eTestLabel), Label(updateTestsLabel), Label(configTestsLabel), Label(slowTestsLabel), func() {
 	var virtualCluster *VirtualCluster
 
 	ctx := context.Background()
@@ -463,7 +463,7 @@ var _ = When("a virtual mode cluster update its server args", Label(e2eTestLabel
 	})
 })
 
-var _ = When("a shared mode cluster update its version", Label(e2eTestLabel), Label(updateTestsLabel), Label(slowTestsLabel), func() {
+var _ = When("a shared mode cluster update its version", Label(e2eTestLabel), Label(updateTestsLabel), Label(upgradeTestsLabel), Label(slowTestsLabel), func() {
 	var (
 		virtualCluster *VirtualCluster
 		nginxPod       *corev1.Pod
@@ -552,7 +552,7 @@ var _ = When("a shared mode cluster update its version", Label(e2eTestLabel), La
 	})
 })
 
-var _ = When("a virtual mode cluster update its version", Label(e2eTestLabel), Label(updateTestsLabel), Label(slowTestsLabel), func() {
+var _ = When("a virtual mode cluster update its version", Label(e2eTestLabel), Label(updateTestsLabel), Label(upgradeTestsLabel), Label(slowTestsLabel), func() {
 	var (
 		virtualCluster *VirtualCluster
 		nginxPod       *corev1.Pod
@@ -656,7 +656,7 @@ var _ = When("a virtual mode cluster update its version", Label(e2eTestLabel), L
 	})
 })
 
-var _ = When("a shared mode cluster scales up servers", Label(e2eTestLabel), Label(updateTestsLabel), Label(slowTestsLabel), func() {
+var _ = When("a shared mode cluster scales up servers", Label(e2eTestLabel), Label(updateTestsLabel), Label(scalingTestsLabel), Label(slowTestsLabel), func() {
 	var (
 		virtualCluster *VirtualCluster
 		nginxPod       *corev1.Pod
@@ -744,7 +744,7 @@ var _ = When("a shared mode cluster scales up servers", Label(e2eTestLabel), Lab
 	})
 })
 
-var _ = When("a shared mode cluster scales down servers", Label(e2eTestLabel), Label(updateTestsLabel), Label(slowTestsLabel), func() {
+var _ = When("a shared mode cluster scales down servers", Label(e2eTestLabel), Label(updateTestsLabel), Label(scalingTestsLabel), Label(slowTestsLabel), func() {
 	var (
 		virtualCluster *VirtualCluster
 		nginxPod       *corev1.Pod
@@ -834,7 +834,7 @@ var _ = When("a shared mode cluster scales down servers", Label(e2eTestLabel), L
 	})
 })
 
-var _ = When("a virtual mode cluster scales up servers", Label(e2eTestLabel), Label(updateTestsLabel), Label(slowTestsLabel), func() {
+var _ = When("a virtual mode cluster scales up servers", Label(e2eTestLabel), Label(updateTestsLabel), Label(scalingTestsLabel), Label(slowTestsLabel), func() {
 	var (
 		virtualCluster *VirtualCluster
 		nginxPod       *corev1.Pod
@@ -922,7 +922,7 @@ var _ = When("a virtual mode cluster scales up servers", Label(e2eTestLabel), La
 	})
 })
 
-var _ = When("a virtual mode cluster scales down servers", Label(e2eTestLabel), Label(updateTestsLabel), Label(slowTestsLabel), func() {
+var _ = When("a virtual mode cluster scales down servers", Label(e2eTestLabel), Label(updateTestsLabel), Label(scalingTestsLabel), Label(slowTestsLabel), func() {
 	var (
 		virtualCluster *VirtualCluster
 		nginxPod       *corev1.Pod
