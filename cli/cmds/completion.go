@@ -40,12 +40,27 @@ func completeNamespaces(cmd *cobra.Command, args []string, toComplete string) ([
 	return namespaceCompletions(cmd, client)
 }
 
+// completeClusterNamespaces is a cobra.CompletionFunc that completes with the namespaces with a k3k virtual cluster in it.
+func completeClusterNamespaces(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	client, err := completionClient(cmd)
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveError
+	}
+
+	return clusterNamespaceCompletions(cmd.Context(), client)
+}
+
 // namespaceCompletions lists every namespace in the host cluster, excluding any
 // already provided to the command's "namespace" flag.
 func namespaceCompletions(cmd *cobra.Command, cl client.Client) ([]string, cobra.ShellCompDirective) {
 	var namespaces corev1.NamespaceList
-	if err := cl.List(context.Background(), &namespaces); err != nil {
+	if err := cl.List(cmd.Context(), &namespaces); err != nil {
 		return nil, cobra.ShellCompDirectiveError
+	}
+
+	allNames := sets.New[string]()
+	for _, ns := range namespaces.Items {
+		allNames.Insert(ns.Name)
 	}
 
 	// Exclude already selected namespaces
@@ -54,42 +69,24 @@ func namespaceCompletions(cmd *cobra.Command, cl client.Client) ([]string, cobra
 		selected.Insert(vals...)
 	}
 
-	names := []string{}
+	names := allNames.Difference(selected)
 
-	for _, ns := range namespaces.Items {
-		if !selected.Has(ns.Name) {
-			names = append(names, ns.Name)
-		}
-	}
-
-	return names, cobra.ShellCompDirectiveNoFileComp
+	return sets.List(names), cobra.ShellCompDirectiveNoFileComp
 }
 
-// completeClusterNamespaces is a cobra.CompletionFunc that completes with the namespaces
-// with a k3k virtual cluster in it.
-func completeClusterNamespaces(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	client, err := completionClient(cmd)
-	if err != nil {
-		return nil, cobra.ShellCompDirectiveError
-	}
-
-	return clusterNamespaceCompletions(client)
-}
-
-// clusterNamespaceCompletions lists the unique namespaces that contain at least
-// one k3k Cluster.
-func clusterNamespaceCompletions(cl client.Client) ([]string, cobra.ShellCompDirective) {
+// clusterNamespaceCompletions lists the unique namespaces that contain at least one k3k Cluster.
+func clusterNamespaceCompletions(ctx context.Context, client client.Client) ([]string, cobra.ShellCompDirective) {
 	var clusters v1beta1.ClusterList
-	if err := cl.List(context.Background(), &clusters); err != nil {
+	if err := client.List(ctx, &clusters); err != nil {
 		return nil, cobra.ShellCompDirectiveError
 	}
 
-	namespaces := sets.New[string]()
+	names := sets.New[string]()
 	for _, cluster := range clusters.Items {
-		namespaces.Insert(cluster.Namespace)
+		names.Insert(cluster.Namespace)
 	}
 
-	return sets.List(namespaces), cobra.ShellCompDirectiveNoFileComp
+	return sets.List(names), cobra.ShellCompDirectiveNoFileComp
 }
 
 // mustRegisterFlagCompletion registers a completion function for a flag and

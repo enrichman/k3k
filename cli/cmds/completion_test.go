@@ -87,7 +87,7 @@ func Test_completeClusterNamespaces(t *testing.T) {
 		).
 		Build()
 
-	names, directive := clusterNamespaceCompletions(fakeClient)
+	names, directive := clusterNamespaceCompletions(t.Context(), fakeClient)
 
 	assert.Equal(t, cobra.ShellCompDirectiveNoFileComp, directive)
 	// only namespaces that contain a cluster, deduplicated; "default" is excluded
