@@ -40,14 +40,30 @@ const (
 	k3sVersion    = "v1.36.2-k3s1"
 	k3sOldVersion = "v1.36.0-k3s1"
 
-	e2eTestLabel           = "e2e"
-	slowTestsLabel         = "slow"
+	// slowTestsLabel marks a top-level test container (a When/Describe node) whose
+	// end-to-end runtime in CI exceeds ~2 minutes. This is the natural cutoff in the
+	// suite: single-cluster feature checks run in ~70-115s, while nodes doing heavier
+	// lifecycle work (create/upgrade/scale/restart, HA persistence, multi-cluster
+	// networking, airgapped registry) run 140s+. It is orthogonal to the context
+	// labels below; `!slow` selects a fast local subset.
+	slowTestsLabel = "slow"
+
+	lifecycleTestsLabel    = "lifecycle"
+	kubeletTestsLabel      = "kubelet"
 	updateTestsLabel       = "update"
+	configTestsLabel       = "config"
+	upgradeTestsLabel      = "upgrade"
+	scalingTestsLabel      = "scaling"
+	podTestsLabel          = "pod"
+	appTestsLabel          = "app"
+	syncTestsLabel         = "sync"
+	policyTestsLabel       = "policy"
 	persistenceTestsLabel  = "persistence"
 	networkingTestsLabel   = "networking"
 	statusTestsLabel       = "status"
 	certificatesTestsLabel = "certificates"
 	registryTestsLabel     = "registry"
+	addonsTestsLabel       = "addons"
 
 	registryImage               = "registry:2"
 	registryCACertSecretName    = "private-registry-ca-cert"

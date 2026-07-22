@@ -17,7 +17,7 @@ import (
 	. "github.com/onsi/gomega/gstruct"
 )
 
-var _ = When("creating a shared mode cluster", Label(e2eTestLabel), Label(slowTestsLabel), func() {
+var _ = When("creating a shared mode cluster", Label(lifecycleTestsLabel), Label(slowTestsLabel), func() {
 	var virtualCluster *VirtualCluster
 
 	BeforeEach(func() {
@@ -139,7 +139,7 @@ var _ = When("creating a shared mode cluster", Label(e2eTestLabel), Label(slowTe
 	})
 })
 
-var _ = When("creating an HCP mode cluster", Label(e2eTestLabel), Label(slowTestsLabel), func() {
+var _ = When("creating an HCP mode cluster", Label(lifecycleTestsLabel), Label(slowTestsLabel), func() {
 	var virtualCluster *VirtualCluster
 
 	BeforeEach(func() {
