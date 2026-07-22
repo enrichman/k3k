@@ -21,7 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = When("a shared mode cluster is created in a namespace with a policy", Ordered, Label(e2eTestLabel), func() {
+var _ = When("a shared mode cluster is created in a namespace with a policy", Ordered, Label(e2eTestLabel), Label(policyTestsLabel), func() {
 	var (
 		ctx            context.Context
 		virtualCluster *VirtualCluster
