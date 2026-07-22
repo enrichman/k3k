@@ -21,7 +21,7 @@ const (
 	addonManifestMountPath       = "/var/lib/rancher/k3s/server/manifests/k3s-addons/nginx.yaml"
 )
 
-var _ = When("a cluster with secretMounts configuration is used to load addons", Label(e2eTestLabel), Label(addonsTestsLabel), func() {
+var _ = When("a cluster with secretMounts configuration is used to load addons", Label(addonsTestsLabel), func() {
 	var virtualCluster *VirtualCluster
 
 	BeforeEach(func() {
@@ -90,7 +90,7 @@ var _ = When("a cluster with secretMounts configuration is used to load addons",
 	})
 })
 
-var _ = When("a cluster with addon configuration is used with addons secret in the same namespace", Label(e2eTestLabel), Label(addonsTestsLabel), func() {
+var _ = When("a cluster with addon configuration is used with addons secret in the same namespace", Label(addonsTestsLabel), func() {
 	var virtualCluster *VirtualCluster
 
 	BeforeEach(func() {
@@ -148,7 +148,7 @@ var _ = When("a cluster with addon configuration is used with addons secret in t
 	})
 })
 
-var _ = When("a cluster with addon configuration is used with addons secret in the different namespace", Label(e2eTestLabel), Label(addonsTestsLabel), func() {
+var _ = When("a cluster with addon configuration is used with addons secret in the different namespace", Label(addonsTestsLabel), func() {
 	var virtualCluster *VirtualCluster
 
 	BeforeEach(func() {

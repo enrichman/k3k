@@ -20,7 +20,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = When("an ephemeral cluster is installed", Label(e2eTestLabel), Label(persistenceTestsLabel), func() {
+var _ = When("an ephemeral cluster is installed", Label(persistenceTestsLabel), Label(slowTestsLabel), func() {
 	var virtualCluster *VirtualCluster
 
 	BeforeEach(func() {
@@ -112,7 +112,7 @@ var _ = When("an ephemeral cluster is installed", Label(e2eTestLabel), Label(per
 	})
 })
 
-var _ = When("a dynamic cluster is installed", Label(e2eTestLabel), Label(persistenceTestsLabel), func() {
+var _ = When("a dynamic cluster is installed", Label(persistenceTestsLabel), Label(slowTestsLabel), func() {
 	var virtualCluster *VirtualCluster
 
 	BeforeEach(func() {

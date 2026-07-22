@@ -22,19 +22,19 @@ jobs:
       matrix:
         include:
         - name: update-config
-          label-filter: "e2e && update && config"
+          label-filter: "update && config"
         - name: update-version
-          label-filter: "e2e && update && upgrade"
+          label-filter: "update && upgrade"
         - name: update-scaling
-          label-filter: "e2e && update && scaling"
+          label-filter: "update && scaling"
         - name: lifecycle
-          label-filter: "e2e && (lifecycle || kubelet)"
+          label-filter: "lifecycle || kubelet"
         - name: persistence
-          label-filter: "e2e && persistence"
+          label-filter: "persistence"
         - name: sync
-          label-filter: "e2e && (pod || app || sync || policy || status)"
+          label-filter: "pod || app || sync || policy || status"
         - name: features
-          label-filter: "e2e && (networking || certificates || registry || addons)"
+          label-filter: "networking || certificates || registry || addons"
 
     name: tests-e2e (${{ matrix.name }})
 

@@ -15,7 +15,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = When("a shared mode cluster is created", Ordered, Label(e2eTestLabel), Label(syncTestsLabel), func() {
+var _ = When("a shared mode cluster is created", Ordered, Label(syncTestsLabel), func() {
 	var (
 		virtualCluster   *VirtualCluster
 		virtualConfigMap *corev1.ConfigMap

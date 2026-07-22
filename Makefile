@@ -24,7 +24,7 @@ PANDOC := $(shell which pandoc 2> /dev/null)
 ENVTEST ?= go run sigs.k8s.io/controller-runtime/tools/setup-envtest@$(ENVTEST_VERSION)
 ENVTEST_DIR ?= $(shell pwd)/.envtest
 
-E2E_LABEL_FILTER ?= e2e
+E2E_LABEL_FILTER ?=
 
 export KUBEBUILDER_ASSETS ?= $(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(ENVTEST_DIR) -p path)
 

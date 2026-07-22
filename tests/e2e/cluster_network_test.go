@@ -15,7 +15,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = When("two virtual clusters are installed", Label(e2eTestLabel), Label(networkingTestsLabel), func() {
+var _ = When("two virtual clusters are installed", Label(networkingTestsLabel), Label(slowTestsLabel), func() {
 	var (
 		cluster1 *VirtualCluster
 		cluster2 *VirtualCluster
