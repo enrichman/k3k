@@ -22,7 +22,7 @@ func NewClusterListCmd(appCtx *AppContext) *cobra.Command {
 		Args:    cobra.NoArgs,
 	}
 
-	CobraFlagNamespace(appCtx, cmd.Flags())
+	CobraFlagNamespace(appCtx, cmd, completeClusterNamespaces)
 
 	return cmd
 }

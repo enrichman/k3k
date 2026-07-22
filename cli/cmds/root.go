@@ -3,6 +3,7 @@ package cmds
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/sirupsen/logrus"
@@ -20,6 +21,11 @@ import (
 
 	"github.com/rancher/k3k/pkg/apis/k3k.io/v1beta1"
 	"github.com/rancher/k3k/pkg/buildinfo"
+)
+
+const (
+	defaultRequestTimeout    = 30 * time.Second       // normal commands
+	completionRequestTimeout = 100 * time.Millisecond // shell completion, must be fast
 )
 
 type AppContext struct {
@@ -49,7 +55,7 @@ func NewRootCmd() *cobra.Command {
 				logrus.SetLevel(logrus.DebugLevel)
 			}
 
-			restConfig, err := loadRESTConfig(appCtx.Kubeconfig)
+			restConfig, err := loadRESTConfig(appCtx.Kubeconfig, defaultRequestTimeout)
 			if err != nil {
 				return err
 			}
@@ -93,8 +99,12 @@ func (ctx *AppContext) Namespace(name string) string {
 	return "k3k-" + name
 }
 
-func CobraFlagNamespace(appCtx *AppContext, flag *pflag.FlagSet) {
-	flag.StringVarP(&appCtx.namespace, "namespace", "n", "", "namespace of the k3k cluster")
+func CobraFlagNamespace(appCtx *AppContext, cmd *cobra.Command, completeFn cobra.CompletionFunc) {
+	cmd.Flags().StringVarP(&appCtx.namespace, "namespace", "n", "", "namespace of the k3k cluster")
+
+	if completeFn != nil {
+		mustRegisterFlagCompletion(cmd, "namespace", completeFn)
+	}
 }
 
 func InitializeConfig(cmd *cobra.Command) {
@@ -112,7 +122,7 @@ func InitializeConfig(cmd *cobra.Command) {
 	})
 }
 
-func loadRESTConfig(kubeconfig string) (*rest.Config, error) {
+func loadRESTConfig(kubeconfig string, timeout time.Duration) (*rest.Config, error) {
 	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
 	configOverrides := &clientcmd.ConfigOverrides{}
 
@@ -122,7 +132,14 @@ func loadRESTConfig(kubeconfig string) (*rest.Config, error) {
 
 	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
 
-	return kubeConfig.ClientConfig()
+	restConfig, err := kubeConfig.ClientConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	restConfig.Timeout = timeout
+
+	return restConfig, nil
 }
 
 func buildClient(restConfig *rest.Config) (client.Client, error) {
