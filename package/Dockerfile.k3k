@@ -1,9 +1,13 @@
 FROM registry.suse.com/bci/bci-base:16.1
 
-ARG BIN_K3K=bin/k3k
-ARG BIN_K3KCLI=bin/k3kcli
+ARG BIN_K3K=k3k
+ARG BIN_K3KCLI=k3kcli
 
-COPY ${BIN_K3K} /usr/bin/
-COPY ${BIN_K3KCLI} /usr/bin/
+# BIN_DIR defaults to the buildx per-platform dir; override (e.g. BIN_DIR=bin) for flat layouts.
+ARG TARGETPLATFORM
+ARG BIN_DIR=${TARGETPLATFORM}
+
+COPY ${BIN_DIR}/${BIN_K3K} /usr/bin/
+COPY ${BIN_DIR}/${BIN_K3KCLI} /usr/bin/
 
 CMD ["k3k"]

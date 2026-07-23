@@ -1,8 +1,11 @@
-# TODO: swicth this to BCI-micro or scratch. Left as base right now so that debug can be done a bit easier
 FROM registry.suse.com/bci/bci-base:16.1
 
-ARG BIN_K3K_KUBELET=bin/k3k-kubelet
+ARG BIN_K3K_KUBELET=k3k-kubelet
 
-COPY ${BIN_K3K_KUBELET} /usr/bin/
+# BIN_DIR defaults to the buildx per-platform dir; override (e.g. BIN_DIR=bin) for flat layouts.
+ARG TARGETPLATFORM
+ARG BIN_DIR=${TARGETPLATFORM}
+
+COPY ${BIN_DIR}/${BIN_K3K_KUBELET} /usr/bin/
 
 ENTRYPOINT ["/usr/bin/k3k-kubelet"]
