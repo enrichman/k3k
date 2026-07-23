@@ -3,11 +3,16 @@ package cli_test
 import (
 	"bytes"
 	"context"
+	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"time"
 
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/rand"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
 
 	corev1 "k8s.io/api/core/v1"
 
@@ -39,6 +44,27 @@ func runCmd(cmdName string, args ...string) (string, string, error) {
 	return stdout.String(), stderr.String(), err
 }
 
+func checkCluster(path string) {
+	GinkgoHelper()
+
+	data, err := os.ReadFile(path)
+	Expect(err).To(Not(HaveOccurred()))
+
+	restCfg, err := clientcmd.RESTConfigFromKubeConfig(data)
+	Expect(err).To(Not(HaveOccurred()))
+
+	cs, err := kubernetes.NewForConfig(restCfg)
+	Expect(err).To(Not(HaveOccurred()))
+
+	Eventually(func() error {
+		_, err := cs.Discovery().ServerVersion()
+		return err
+	}).
+		WithTimeout(time.Minute).
+		WithPolling(time.Second * 5).
+		Should(Succeed())
+}
+
 var _ = When("using the k3kcli", Label("cli"), func() {
 	It("can get the version", func() {
 		stdout, _, err := K3kcli("--version")
@@ -67,6 +93,19 @@ var _ = When("using the k3kcli", Label("cli"), func() {
 			_, stderr, err = K3kcli("cluster", "create", "--namespace", clusterNamespace, clusterName)
 			Expect(err).To(Not(HaveOccurred()), string(stderr))
 			Expect(stderr).To(ContainSubstring("You can start using the cluster"))
+
+			By("Connecting to the cluster with the generated kubeconfig")
+
+			cwd, err := os.Getwd()
+			Expect(err).To(Not(HaveOccurred()))
+
+			kubeconfig := filepath.Join(cwd, fmt.Sprintf("%s-%s-kubeconfig.yaml", clusterNamespace, clusterName))
+
+			DeferCleanup(func() {
+				_ = os.Remove(kubeconfig)
+			})
+
+			checkCluster(kubeconfig)
 
 			By("Listing the clusters")
 
@@ -475,17 +514,34 @@ var _ = When("using the k3kcli", Label("cli"), func() {
 				fwk3k.DeleteNamespaces(k8s, clusterNamespace)
 			})
 
+			cwd, err := os.Getwd()
+			Expect(err).To(Not(HaveOccurred()))
+
+			kubeconfig := filepath.Join(cwd, fmt.Sprintf("%s-%s-kubeconfig.yaml", clusterNamespace, clusterName))
+
+			DeferCleanup(func() {
+				_ = os.Remove(kubeconfig)
+			})
+
 			By("Creating the cluster")
 
 			_, stderr, err = K3kcli("cluster", "create", "--namespace", clusterNamespace, clusterName)
 			Expect(err).To(Not(HaveOccurred()), string(stderr))
 			Expect(stderr).To(ContainSubstring("You can start using the cluster"))
 
+			By("Connecting with the kubeconfig written by cluster create")
+
+			checkCluster(kubeconfig)
+
 			By("Generating the kubeconfig")
 
 			_, stderr, err = K3kcli("kubeconfig", "generate", "--namespace", clusterNamespace, "--name", clusterName)
 			Expect(err).To(Not(HaveOccurred()), string(stderr))
 			Expect(stderr).To(ContainSubstring("You can start using the cluster"))
+
+			By("Connecting with the kubeconfig written by kubeconfig generate")
+
+			checkCluster(kubeconfig)
 
 			_, stderr, err = K3kcli("cluster", "delete", "--namespace", clusterNamespace, clusterName)
 			Expect(err).To(Not(HaveOccurred()), string(stderr))
