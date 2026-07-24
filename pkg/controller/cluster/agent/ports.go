@@ -9,12 +9,12 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/kubernetes/pkg/apis/core"
 	"k8s.io/kubernetes/pkg/registry/core/service/portallocator"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
-	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -26,12 +26,12 @@ const (
 )
 
 type PortAllocator struct {
-	ctrlruntimeclient.Client
+	client.Client
 
 	KubeletCM *corev1.ConfigMap
 }
 
-func NewPortAllocator(ctx context.Context, client ctrlruntimeclient.Client) (*PortAllocator, error) {
+func NewPortAllocator(ctx context.Context, client client.Client) (*PortAllocator, error) {
 	log := ctrl.LoggerFrom(ctx)
 	log.Info("starting port allocator")
 
@@ -51,7 +51,7 @@ func NewPortAllocator(ctx context.Context, client ctrlruntimeclient.Client) (*Po
 	}, nil
 }
 
-func (a *PortAllocator) InitPortAllocatorConfig(ctx context.Context, client ctrlruntimeclient.Client, kubeletPortRange string) manager.Runnable {
+func (a *PortAllocator) InitPortAllocatorConfig(ctx context.Context, _ client.Client, kubeletPortRange string) manager.Runnable {
 	return manager.RunnableFunc(func(ctx context.Context) error {
 		return a.getOrCreate(ctx, a.KubeletCM, kubeletPortRange)
 	})

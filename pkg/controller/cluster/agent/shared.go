@@ -7,13 +7,13 @@ import (
 
 	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
-	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/rancher/k3k/k3k-kubelet/translate"
 	"github.com/rancher/k3k/pkg/apis/k3k.io/v1beta1"
@@ -79,7 +79,7 @@ func (s *SharedAgent) EnsureResources(ctx context.Context) error {
 	return nil
 }
 
-func (s *SharedAgent) ensureObject(ctx context.Context, obj ctrlruntimeclient.Object) error {
+func (s *SharedAgent) ensureObject(ctx context.Context, obj client.Object) error {
 	return ensureObject(ctx, s.Config, obj)
 }
 

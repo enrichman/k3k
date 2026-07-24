@@ -5,6 +5,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -13,7 +14,6 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
-	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/rancher/k3k/k3k-kubelet/translate"
 	"github.com/rancher/k3k/pkg/apis/k3k.io/v1beta1"
@@ -52,7 +52,7 @@ func AddIngressSyncer(ctx context.Context, virtMgr, hostMgr manager.Manager, clu
 		Complete(&reconciler)
 }
 
-func (r *IngressReconciler) filterResources(object ctrlruntimeclient.Object) bool {
+func (r *IngressReconciler) filterResources(object client.Object) bool {
 	var cluster v1beta1.Cluster
 
 	ctx := context.Background()
@@ -102,7 +102,7 @@ func (r *IngressReconciler) Reconcile(ctx context.Context, req reconcile.Request
 	syncConfig := appliedSync.Ingresses
 
 	if err := r.VirtualClient.Get(ctx, req.NamespacedName, &virtIngress); err != nil {
-		return reconcile.Result{}, ctrlruntimeclient.IgnoreNotFound(err)
+		return reconcile.Result{}, client.IgnoreNotFound(err)
 	}
 
 	syncedIngress := r.ingress(&virtIngress, syncConfig.DisableTLSSecretTranslation)
@@ -115,7 +115,7 @@ func (r *IngressReconciler) Reconcile(ctx context.Context, req reconcile.Request
 	if !virtIngress.DeletionTimestamp.IsZero() {
 		// deleting the synced service if exists
 		if err := r.HostClient.Delete(ctx, syncedIngress); err != nil {
-			return reconcile.Result{}, ctrlruntimeclient.IgnoreNotFound(err)
+			return reconcile.Result{}, client.IgnoreNotFound(err)
 		}
 
 		// remove the finalizer after cleaning up the synced service

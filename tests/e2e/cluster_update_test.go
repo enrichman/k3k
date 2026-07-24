@@ -7,10 +7,10 @@ import (
 
 	"k8s.io/kubernetes/pkg/api/v1/pod"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/rancher/k3k/pkg/apis/k3k.io/v1beta1"
 	fwk3k "github.com/rancher/k3k/tests/framework/k3k"
@@ -98,7 +98,7 @@ var _ = When("a shared mode cluster update its envs", Label(updateTestsLabel), L
 		Eventually(func(g Gomega) {
 			var cluster v1beta1.Cluster
 
-			err := k8sClient.Get(ctx, ctrlruntimeclient.ObjectKeyFromObject(virtualCluster.Cluster), &cluster)
+			err := k8sClient.Get(ctx, client.ObjectKeyFromObject(virtualCluster.Cluster), &cluster)
 			g.Expect(err).NotTo(HaveOccurred())
 
 			// update both agent and server envs
@@ -214,7 +214,7 @@ var _ = When("a shared mode cluster update its server args", Label(updateTestsLa
 		Eventually(func(g Gomega) {
 			var cluster v1beta1.Cluster
 
-			err := k8sClient.Get(ctx, ctrlruntimeclient.ObjectKeyFromObject(virtualCluster.Cluster), &cluster)
+			err := k8sClient.Get(ctx, client.ObjectKeyFromObject(virtualCluster.Cluster), &cluster)
 			g.Expect(err).NotTo(HaveOccurred())
 
 			cluster.Spec.ServerArgs = []string{
@@ -320,7 +320,7 @@ var _ = When("a virtual mode cluster update its envs", Label(updateTestsLabel), 
 		Eventually(func(g Gomega) {
 			var cluster v1beta1.Cluster
 
-			err := k8sClient.Get(ctx, ctrlruntimeclient.ObjectKeyFromObject(virtualCluster.Cluster), &cluster)
+			err := k8sClient.Get(ctx, client.ObjectKeyFromObject(virtualCluster.Cluster), &cluster)
 			g.Expect(err).NotTo(HaveOccurred())
 
 			// update both agent and server envs
@@ -436,7 +436,7 @@ var _ = When("a virtual mode cluster update its server args", Label(updateTestsL
 		Eventually(func(g Gomega) {
 			var cluster v1beta1.Cluster
 
-			err := k8sClient.Get(ctx, ctrlruntimeclient.ObjectKeyFromObject(virtualCluster.Cluster), &cluster)
+			err := k8sClient.Get(ctx, client.ObjectKeyFromObject(virtualCluster.Cluster), &cluster)
 			g.Expect(err).NotTo(HaveOccurred())
 
 			cluster.Spec.ServerArgs = []string{
@@ -514,7 +514,7 @@ var _ = When("a shared mode cluster update its version", Label(updateTestsLabel)
 
 		ctx := context.Background()
 
-		err := k8sClient.Get(ctx, ctrlruntimeclient.ObjectKeyFromObject(virtualCluster.Cluster), &cluster)
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(virtualCluster.Cluster), &cluster)
 		Expect(err).NotTo(HaveOccurred())
 
 		// update cluster version
@@ -608,7 +608,7 @@ var _ = When("a virtual mode cluster update its version", Label(updateTestsLabel
 
 		ctx := context.Background()
 
-		err := k8sClient.Get(ctx, ctrlruntimeclient.ObjectKeyFromObject(virtualCluster.Cluster), &cluster)
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(virtualCluster.Cluster), &cluster)
 		Expect(err).NotTo(HaveOccurred())
 
 		// update cluster version
@@ -707,7 +707,7 @@ var _ = When("a shared mode cluster scales up servers", Label(updateTestsLabel),
 
 		ctx := context.Background()
 
-		err := k8sClient.Get(ctx, ctrlruntimeclient.ObjectKeyFromObject(virtualCluster.Cluster), &cluster)
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(virtualCluster.Cluster), &cluster)
 		Expect(err).NotTo(HaveOccurred())
 
 		// scale cluster servers to 3 nodes
@@ -799,7 +799,7 @@ var _ = When("a shared mode cluster scales down servers", Label(updateTestsLabel
 
 		ctx := context.Background()
 
-		err := k8sClient.Get(ctx, ctrlruntimeclient.ObjectKeyFromObject(virtualCluster.Cluster), &cluster)
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(virtualCluster.Cluster), &cluster)
 		Expect(err).NotTo(HaveOccurred())
 
 		// scale down cluster servers to 1 node
@@ -885,7 +885,7 @@ var _ = When("a virtual mode cluster scales up servers", Label(updateTestsLabel)
 
 		ctx := context.Background()
 
-		err := k8sClient.Get(ctx, ctrlruntimeclient.ObjectKeyFromObject(virtualCluster.Cluster), &cluster)
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(virtualCluster.Cluster), &cluster)
 		Expect(err).NotTo(HaveOccurred())
 
 		// scale cluster servers to 3 nodes
@@ -980,7 +980,7 @@ var _ = When("a virtual mode cluster scales down servers", Label(updateTestsLabe
 
 		ctx := context.Background()
 
-		err := k8sClient.Get(ctx, ctrlruntimeclient.ObjectKeyFromObject(virtualCluster.Cluster), &cluster)
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(virtualCluster.Cluster), &cluster)
 		Expect(err).NotTo(HaveOccurred())
 
 		// scale down cluster servers to 1 node

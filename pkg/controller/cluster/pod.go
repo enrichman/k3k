@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -11,7 +12,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
-	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/rancher/k3k/k3k-kubelet/translate"
 )
@@ -21,7 +21,7 @@ const (
 )
 
 type PodReconciler struct {
-	Client ctrlruntimeclient.Client
+	Client client.Client
 	Scheme *runtime.Scheme
 }
 
@@ -47,7 +47,7 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req reconcile.Request) (r
 
 	var pod corev1.Pod
 	if err := r.Client.Get(ctx, req.NamespacedName, &pod); err != nil {
-		return reconcile.Result{}, ctrlruntimeclient.IgnoreNotFound(err)
+		return reconcile.Result{}, client.IgnoreNotFound(err)
 	}
 
 	// get cluster from the object
@@ -71,7 +71,7 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req reconcile.Request) (r
 
 		log.V(1).Info("Deleting Virtual Pod", "name", virtName, "namespace", virtNamespace)
 
-		return reconcile.Result{}, ctrlruntimeclient.IgnoreNotFound(virtualClient.Delete(ctx, &virtPod))
+		return reconcile.Result{}, client.IgnoreNotFound(virtualClient.Delete(ctx, &virtPod))
 	}
 
 	return reconcile.Result{}, nil

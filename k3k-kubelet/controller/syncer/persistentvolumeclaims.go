@@ -6,6 +6,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/component-helpers/storage/volume"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -15,7 +16,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
-	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/rancher/k3k/k3k-kubelet/translate"
 	"github.com/rancher/k3k/pkg/apis/k3k.io/v1beta1"
@@ -55,7 +55,7 @@ func AddPVCSyncer(ctx context.Context, virtMgr, hostMgr manager.Manager, cluster
 		Complete(&reconciler)
 }
 
-func (r *PVCReconciler) filterResources(object ctrlruntimeclient.Object) bool {
+func (r *PVCReconciler) filterResources(object client.Object) bool {
 	var cluster v1beta1.Cluster
 
 	ctx := context.Background()
@@ -94,7 +94,7 @@ func (r *PVCReconciler) Reconcile(ctx context.Context, req reconcile.Request) (r
 	}
 
 	if err := r.VirtualClient.Get(ctx, req.NamespacedName, &virtPVC); err != nil {
-		return reconcile.Result{}, ctrlruntimeclient.IgnoreNotFound(err)
+		return reconcile.Result{}, client.IgnoreNotFound(err)
 	}
 
 	syncedPVC := r.pvc(&virtPVC)
@@ -133,7 +133,7 @@ func (r *PVCReconciler) Reconcile(ctx context.Context, req reconcile.Request) (r
 
 	var currentHostPVC corev1.PersistentVolumeClaim
 
-	err := r.HostClient.Get(ctx, ctrlruntimeclient.ObjectKeyFromObject(syncedPVC), &currentHostPVC)
+	err := r.HostClient.Get(ctx, client.ObjectKeyFromObject(syncedPVC), &currentHostPVC)
 	if err == nil {
 		log.V(1).Info("persistent volume claim already exist in the host cluster")
 	}
@@ -178,7 +178,7 @@ func (r *PVCReconciler) createVirtualPersistentVolume(ctx context.Context, pvc c
 		Phase: corev1.VolumeBound,
 	}
 
-	if err := r.VirtualClient.Status().Patch(ctx, pv, ctrlruntimeclient.MergeFrom(orig)); err != nil {
+	if err := r.VirtualClient.Status().Patch(ctx, pv, client.MergeFrom(orig)); err != nil {
 		return err
 	}
 

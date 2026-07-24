@@ -6,12 +6,12 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	corev1 "k8s.io/api/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
-	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/rancher/k3k/k3k-kubelet/translate"
 )
@@ -21,7 +21,7 @@ const (
 )
 
 type ServiceReconciler struct {
-	HostClient ctrlruntimeclient.Client
+	HostClient client.Client
 }
 
 // Add adds a new controller to the manager
@@ -43,7 +43,7 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req reconcile.Request
 
 	var hostService corev1.Service
 	if err := r.HostClient.Get(ctx, req.NamespacedName, &hostService); err != nil {
-		return reconcile.Result{}, ctrlruntimeclient.IgnoreNotFound(err)
+		return reconcile.Result{}, client.IgnoreNotFound(err)
 	}
 
 	// Some services are owned by the cluster but don't have the annotations set (i.e. the kubelet svc)

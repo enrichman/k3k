@@ -20,14 +20,14 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	corev1 "k8s.io/api/core/v1"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
-	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
-	ctrlserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	"github.com/rancher/k3k/k3k-kubelet/controller/syncer"
 	"github.com/rancher/k3k/k3k-kubelet/provider"
@@ -51,7 +51,7 @@ type kubelet struct {
 	virtConfig *rest.Config
 	agentIP    string
 	dnsIP      string
-	hostClient ctrlruntimeclient.Client
+	hostClient client.Client
 	virtClient kubernetes.Interface
 	hostMgr    manager.Manager
 	virtualMgr manager.Manager
@@ -69,7 +69,7 @@ func newKubelet(ctx context.Context, c *config) (*kubelet, error) {
 		return nil, err
 	}
 
-	hostClient, err := ctrlruntimeclient.New(hostConfig, ctrlruntimeclient.Options{
+	hostClient, err := client.New(hostConfig, client.Options{
 		Scheme: baseScheme,
 	})
 	if err != nil {
@@ -99,7 +99,7 @@ func newKubelet(ctx context.Context, c *config) (*kubelet, error) {
 		LeaderElection:          true,
 		LeaderElectionNamespace: c.ClusterNamespace,
 		LeaderElectionID:        c.ClusterName,
-		Metrics: ctrlserver.Options{
+		Metrics: metricsserver.Options{
 			BindAddress: hostMetricsBindAddress,
 		},
 		Cache: cache.Options{
@@ -123,7 +123,7 @@ func newKubelet(ctx context.Context, c *config) (*kubelet, error) {
 		LeaderElection:          true,
 		LeaderElectionNamespace: "kube-system",
 		LeaderElectionID:        c.ClusterName,
-		Metrics: ctrlserver.Options{
+		Metrics: metricsserver.Options{
 			BindAddress: virtualMetricsBindAddress,
 		},
 	})
@@ -178,7 +178,7 @@ func newKubelet(ctx context.Context, c *config) (*kubelet, error) {
 	}, nil
 }
 
-func clusterIP(ctx context.Context, serviceName, clusterNamespace string, hostClient ctrlruntimeclient.Client) (string, error) {
+func clusterIP(ctx context.Context, serviceName, clusterNamespace string, hostClient client.Client) (string, error) {
 	var service corev1.Service
 
 	serviceKey := types.NamespacedName{
@@ -259,7 +259,7 @@ func (k *kubelet) newProviderFunc(cfg config) nodeutil.NewProviderFunc {
 	}
 }
 
-func virtRestConfig(ctx context.Context, virtualConfigPath string, hostClient ctrlruntimeclient.Client, clusterName, clusterNamespace string) (*rest.Config, error) {
+func virtRestConfig(ctx context.Context, virtualConfigPath string, hostClient client.Client, clusterName, clusterNamespace string) (*rest.Config, error) {
 	if virtualConfigPath != "" {
 		return clientcmd.BuildConfigFromFlags("", virtualConfigPath)
 	}
@@ -287,7 +287,7 @@ func virtRestConfig(ctx context.Context, virtualConfigPath string, hostClient ct
 	return restConfig, nil
 }
 
-func addControllers(ctx context.Context, hostMgr, virtualMgr manager.Manager, c *config, hostClient ctrlruntimeclient.Client, virtEventRecorder record.EventRecorder) error {
+func addControllers(ctx context.Context, hostMgr, virtualMgr manager.Manager, c *config, hostClient client.Client, virtEventRecorder record.EventRecorder) error {
 	var cluster v1beta1.Cluster
 
 	objKey := types.NamespacedName{

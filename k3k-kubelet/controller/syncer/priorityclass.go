@@ -6,6 +6,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -15,7 +16,6 @@ import (
 	schedulingv1 "k8s.io/api/scheduling/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
-	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/rancher/k3k/k3k-kubelet/translate"
 	"github.com/rancher/k3k/pkg/apis/k3k.io/v1beta1"
@@ -73,7 +73,7 @@ var ignoreSystemPrefixPredicate = predicate.Funcs{
 	},
 }
 
-func (r *PriorityClassSyncer) filterResources(object ctrlruntimeclient.Object) bool {
+func (r *PriorityClassSyncer) filterResources(object client.Object) bool {
 	var cluster v1beta1.Cluster
 
 	ctx := context.Background()
@@ -112,7 +112,7 @@ func (r *PriorityClassSyncer) Reconcile(ctx context.Context, req reconcile.Reque
 	}
 
 	if err := r.VirtualClient.Get(ctx, req.NamespacedName, &priorityClass); err != nil {
-		return reconcile.Result{}, ctrlruntimeclient.IgnoreNotFound(err)
+		return reconcile.Result{}, client.IgnoreNotFound(err)
 	}
 
 	hostPriorityClass := r.translatePriorityClass(priorityClass)

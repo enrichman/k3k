@@ -8,12 +8,12 @@ import (
 
 	"gopkg.in/yaml.v3"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
-	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/rancher/k3k/pkg/controller"
 	"github.com/rancher/k3k/pkg/controller/cluster/mounts"
@@ -66,7 +66,7 @@ func (v *VirtualAgent) EnsureResources(ctx context.Context) error {
 	return nil
 }
 
-func (v *VirtualAgent) ensureObject(ctx context.Context, obj ctrlruntimeclient.Object) error {
+func (v *VirtualAgent) ensureObject(ctx context.Context, obj client.Object) error {
 	return ensureObject(ctx, v.Config, obj)
 }
 

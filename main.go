@@ -19,7 +19,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
-	ctrlruntimelog "sigs.k8s.io/controller-runtime/pkg/log"
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/rancher/k3k/cli/cmds"
 	"github.com/rancher/k3k/pkg/apis/k3k.io/v1beta1"
@@ -87,7 +87,7 @@ func run(cmd *cobra.Command, args []string) error {
 	defer stop()
 
 	logger.Info("Starting k3k - version: " + buildinfo.Version)
-	ctrlruntimelog.SetLogger(logger)
+	ctrllog.SetLogger(logger)
 
 	restConfig, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {

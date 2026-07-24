@@ -6,9 +6,9 @@ import (
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/cli-runtime/pkg/printers"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/rancher/k3k/pkg/apis/k3k.io/v1beta1"
 )
@@ -30,15 +30,15 @@ func NewClusterListCmd(appCtx *AppContext) *cobra.Command {
 func list(appCtx *AppContext) func(cmd *cobra.Command, args []string) error {
 	return func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
-		client := appCtx.Client
+		k8sClient := appCtx.Client
 
 		var clusters v1beta1.ClusterList
-		if err := client.List(ctx, &clusters, ctrlclient.InNamespace(appCtx.namespace)); err != nil {
+		if err := k8sClient.List(ctx, &clusters, client.InNamespace(appCtx.namespace)); err != nil {
 			return err
 		}
 
 		crd := &apiextensionsv1.CustomResourceDefinition{}
-		if err := client.Get(ctx, types.NamespacedName{Name: "clusters.k3k.io"}, crd); err != nil {
+		if err := k8sClient.Get(ctx, types.NamespacedName{Name: "clusters.k3k.io"}, crd); err != nil {
 			return err
 		}
 

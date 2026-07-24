@@ -6,7 +6,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
-	ctrlruntimezap "sigs.k8s.io/controller-runtime/pkg/log/zap"
+	ctrlzap "sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
 func New(debug bool, format string) *zap.Logger {
@@ -35,5 +35,5 @@ func newEncoder(format string) zapcore.Encoder {
 		encoder = zapcore.NewJSONEncoder(encCfg)
 	}
 
-	return &ctrlruntimezap.KubeAwareEncoder{Encoder: encoder}
+	return &ctrlzap.KubeAwareEncoder{Encoder: encoder}
 }

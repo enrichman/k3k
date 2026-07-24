@@ -5,6 +5,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -13,7 +14,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
-	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/rancher/k3k/k3k-kubelet/translate"
 	"github.com/rancher/k3k/pkg/apis/k3k.io/v1beta1"
@@ -71,7 +71,7 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req reconcile.Request
 	}
 
 	if err := r.VirtualClient.Get(ctx, req.NamespacedName, &virtService); err != nil {
-		return reconcile.Result{}, ctrlruntimeclient.IgnoreNotFound(err)
+		return reconcile.Result{}, client.IgnoreNotFound(err)
 	}
 
 	syncedService := r.service(&virtService)
@@ -84,7 +84,7 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req reconcile.Request
 	if !virtService.DeletionTimestamp.IsZero() {
 		// deleting the synced service if exists
 		if err := r.HostClient.Delete(ctx, syncedService); err != nil {
-			return reconcile.Result{}, ctrlruntimeclient.IgnoreNotFound(err)
+			return reconcile.Result{}, client.IgnoreNotFound(err)
 		}
 
 		// remove the finalizer after cleaning up the synced service
@@ -120,7 +120,7 @@ func (r *ServiceReconciler) Reconcile(ctx context.Context, req reconcile.Request
 	return reconcile.Result{}, r.HostClient.Update(ctx, syncedService)
 }
 
-func (r *ServiceReconciler) filterResources(object ctrlruntimeclient.Object) bool {
+func (r *ServiceReconciler) filterResources(object client.Object) bool {
 	var cluster v1beta1.Cluster
 
 	ctx := context.Background()

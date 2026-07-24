@@ -12,6 +12,7 @@ import (
 	"go.etcd.io/etcd/api/v3/v3rpc/rpctypes"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/util/retry"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -24,7 +25,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
-	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/rancher/k3k/pkg/apis/k3k.io/v1beta1"
 	k3kcontroller "github.com/rancher/k3k/pkg/controller"
@@ -40,7 +40,7 @@ const (
 )
 
 type StatefulSetReconciler struct {
-	Client ctrlruntimeclient.Client
+	Client client.Client
 	Scheme *runtime.Scheme
 }
 
@@ -69,7 +69,7 @@ func (p *StatefulSetReconciler) Reconcile(ctx context.Context, req reconcile.Req
 	if err := p.Client.Get(ctx, req.NamespacedName, &sts); err != nil {
 		// we can ignore the IsNotFound error
 		// if the stateful set was deleted we have already cleaned up the pods
-		return reconcile.Result{}, ctrlruntimeclient.IgnoreNotFound(err)
+		return reconcile.Result{}, client.IgnoreNotFound(err)
 	}
 
 	// get cluster name from the object
@@ -309,14 +309,14 @@ func (p *StatefulSetReconciler) listPods(ctx context.Context, sts *appsv1.Statef
 		return nil, fmt.Errorf("failed to create selector from statefulset: %w", err)
 	}
 
-	listOpts := &ctrlruntimeclient.ListOptions{
+	listOpts := &client.ListOptions{
 		Namespace:     sts.Namespace,
 		LabelSelector: selector,
 	}
 
 	var podList corev1.PodList
 	if err := p.Client.List(ctx, &podList, listOpts); err != nil {
-		return nil, ctrlruntimeclient.IgnoreNotFound(err)
+		return nil, client.IgnoreNotFound(err)
 	}
 
 	return &podList, nil

@@ -20,6 +20,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -34,11 +35,10 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
-	ctrlcontroller "sigs.k8s.io/controller-runtime/pkg/controller"
 
 	"github.com/rancher/k3k/k3k-kubelet/translate"
 	"github.com/rancher/k3k/pkg/apis/k3k.io/v1beta1"
-	"github.com/rancher/k3k/pkg/controller"
+	k3kcontroller "github.com/rancher/k3k/pkg/controller"
 	"github.com/rancher/k3k/pkg/controller/cluster/agent"
 	"github.com/rancher/k3k/pkg/controller/cluster/server"
 	"github.com/rancher/k3k/pkg/controller/cluster/server/bootstrap"
@@ -166,7 +166,7 @@ func Add(ctx context.Context, mgr manager.Manager, config *Config, maxConcurrent
 		).
 		Owns(&appsv1.StatefulSet{}).
 		Owns(&corev1.Service{}).
-		WithOptions(ctrlcontroller.Options{MaxConcurrentReconciles: maxConcurrentReconciles}).
+		WithOptions(controller.Options{MaxConcurrentReconciles: maxConcurrentReconciles}).
 		Complete(&reconciler)
 }
 
@@ -514,7 +514,7 @@ func (c *ClusterReconciler) ensureKubeconfigSecret(ctx context.Context, cluster 
 
 	kubeconfigSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      controller.SafeConcatNameWithPrefix(cluster.Name, "kubeconfig"),
+			Name:      k3kcontroller.SafeConcatNameWithPrefix(cluster.Name, "kubeconfig"),
 			Namespace: cluster.Namespace,
 		},
 	}
@@ -574,7 +574,7 @@ func (c *ClusterReconciler) ensureNetworkPolicy(ctx context.Context, cluster *v1
 	log := ctrl.LoggerFrom(ctx)
 	log.V(1).Info("Ensuring network policy")
 
-	networkPolicyName := controller.SafeConcatNameWithPrefix(cluster.Name)
+	networkPolicyName := k3kcontroller.SafeConcatNameWithPrefix(cluster.Name)
 
 	// network policies are managed by the Policy -> delete the one created as a standalone cluster
 	if cluster.Status.PolicyName != "" {
@@ -595,7 +595,7 @@ func (c *ClusterReconciler) ensureNetworkPolicy(ctx context.Context, cluster *v1
 
 	expectedNetworkPolicy := &networkingv1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      controller.SafeConcatNameWithPrefix(cluster.Name),
+			Name:      k3kcontroller.SafeConcatNameWithPrefix(cluster.Name),
 			Namespace: cluster.Namespace,
 		},
 		TypeMeta: metav1.TypeMeta{
@@ -926,7 +926,7 @@ func (c *ClusterReconciler) bindClusterRoles(ctx context.Context, cluster *v1bet
 
 		clusterSubject := rbacv1.Subject{
 			Kind:      rbacv1.ServiceAccountKind,
-			Name:      controller.SafeConcatNameWithPrefix(cluster.Name, agent.SharedNodeAgentName),
+			Name:      k3kcontroller.SafeConcatNameWithPrefix(cluster.Name, agent.SharedNodeAgentName),
 			Namespace: cluster.Namespace,
 		}
 

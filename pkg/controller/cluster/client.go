@@ -6,15 +6,15 @@ import (
 
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/clientcmd"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	corev1 "k8s.io/api/core/v1"
-	ctrlruntimeclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/rancher/k3k/pkg/controller"
 )
 
 // newVirtualClient creates a new Client that can be used to interact with the virtual cluster
-func newVirtualClient(ctx context.Context, hostClient ctrlruntimeclient.Client, clusterName, clusterNamespace string) (ctrlruntimeclient.Client, error) {
+func newVirtualClient(ctx context.Context, hostClient client.Client, clusterName, clusterNamespace string) (client.Client, error) {
 	var clusterKubeConfig corev1.Secret
 
 	kubeconfigSecretName := types.NamespacedName{
@@ -31,5 +31,5 @@ func newVirtualClient(ctx context.Context, hostClient ctrlruntimeclient.Client, 
 		return nil, fmt.Errorf("failed to create config from kubeconfig file: %w", err)
 	}
 
-	return ctrlruntimeclient.New(restConfig, ctrlruntimeclient.Options{})
+	return client.New(restConfig, client.Options{})
 }

@@ -8,12 +8,12 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/rancher/k3k/pkg/apis/k3k.io/v1beta1"
 	k3kcluster "github.com/rancher/k3k/pkg/controller/cluster"
@@ -40,7 +40,7 @@ func NewClusterDeleteCmd(appCtx *AppContext) *cobra.Command {
 func delete(appCtx *AppContext) func(cmd *cobra.Command, args []string) error {
 	return func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
-		client := appCtx.Client
+		k8sClient := appCtx.Client
 		name := args[0]
 
 		if name == k3kcluster.ClusterInvalidName {
@@ -55,7 +55,7 @@ func delete(appCtx *AppContext) func(cmd *cobra.Command, args []string) error {
 				Namespace: namespace,
 			},
 		}
-		if err := client.Get(ctx, ctrlclient.ObjectKeyFromObject(&cluster), &cluster); err != nil {
+		if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(&cluster), &cluster); err != nil {
 			if apierrors.IsNotFound(err) {
 				return fmt.Errorf("cluster %q not found in namespace %q", name, namespace)
 			}
@@ -68,29 +68,29 @@ func delete(appCtx *AppContext) func(cmd *cobra.Command, args []string) error {
 		// keep bootstrap secrets and tokens if --keep-data flag is passed
 		if keepData {
 			// skip removing tokenSecret
-			if err := RemoveOwnerReferenceFromSecret(ctx, k3kcluster.TokenSecretName(cluster.Name), client, cluster); err != nil {
+			if err := RemoveOwnerReferenceFromSecret(ctx, k3kcluster.TokenSecretName(cluster.Name), k8sClient, cluster); err != nil {
 				return err
 			}
 		} else {
-			matchingLabels := ctrlclient.MatchingLabels(map[string]string{"cluster": cluster.Name, "role": "server"})
-			listOpts := ctrlclient.ListOptions{Namespace: cluster.Namespace}
+			matchingLabels := client.MatchingLabels(map[string]string{"cluster": cluster.Name, "role": "server"})
+			listOpts := client.ListOptions{Namespace: cluster.Namespace}
 			matchingLabels.ApplyToList(&listOpts)
-			deleteOpts := &ctrlclient.DeleteAllOfOptions{ListOptions: listOpts}
+			deleteOpts := &client.DeleteAllOfOptions{ListOptions: listOpts}
 
-			if err := client.DeleteAllOf(ctx, &corev1.PersistentVolumeClaim{}, deleteOpts); err != nil {
-				return ctrlclient.IgnoreNotFound(err)
+			if err := k8sClient.DeleteAllOf(ctx, &corev1.PersistentVolumeClaim{}, deleteOpts); err != nil {
+				return client.IgnoreNotFound(err)
 			}
 		}
 
-		if err := client.Delete(ctx, &cluster); err != nil {
-			return ctrlclient.IgnoreNotFound(err)
+		if err := k8sClient.Delete(ctx, &cluster); err != nil {
+			return client.IgnoreNotFound(err)
 		}
 
 		return nil
 	}
 }
 
-func RemoveOwnerReferenceFromSecret(ctx context.Context, name string, cl ctrlclient.Client, cluster v1beta1.Cluster) error {
+func RemoveOwnerReferenceFromSecret(ctx context.Context, name string, cl client.Client, cluster v1beta1.Cluster) error {
 	var secret corev1.Secret
 
 	key := types.NamespacedName{
