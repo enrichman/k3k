@@ -11,6 +11,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	"github.com/rancher/k3k/k3k-kubelet/translate"
@@ -74,31 +75,54 @@ func (s *EventSyncer) Reconcile(ctx context.Context, req reconcile.Request) (rec
 		return reconcile.Result{}, nil
 	}
 
-	virtualRef := s.Translator.TranslateObjectReferenceFrom(event.InvolvedObject)
-
-	// Look up the corresponding object in the virtual cluster.
-	virtPod := &corev1.Pod{}
-	if err := s.VirtualClient.Get(ctx, client.ObjectKey{Name: virtualRef.Name, Namespace: virtualRef.Namespace}, virtPod); err != nil {
-		if client.IgnoreNotFound(err) != nil {
-			return reconcile.Result{}, fmt.Errorf("could not load virtual object: %w", err)
+	hostPod := &corev1.Pod{}
+	if err := s.HostClient.Get(ctx, client.ObjectKey{Name: event.InvolvedObject.Name, Namespace: event.InvolvedObject.Namespace}, hostPod); err != nil {
+		if apierrors.IsNotFound(err) {
+			return reconcile.Result{}, fmt.Errorf("could not load host object: %w", err)
 		}
 
-		logger.Info("virtual object not found, skipping event emission",
-			"virtualInvolvedObject.kind", virtualRef.Kind,
-			"virtualInvolvedObject.name", virtualRef.Name,
+		logger.V(1).Info("host object not found, skipping event emission",
+			"involvedObjectName", event.InvolvedObject.Name,
+			"involvedObjectNamespace", event.InvolvedObject.Namespace,
 		)
 
 		return reconcile.Result{}, nil
 	}
 
-	logger.V(3).Info("Emitting event into virtual cluster", "virtPod.name",
-		virtPod.GetName(), "virtPod.namespace", virtPod.GetNamespace(), "reason",
-		event.Reason, "message", event.Message, "type", event.Type)
+	s.Translator.TranslateFrom(hostPod)
+
+	if hostPod.Name == "" {
+		logger.V(1).Info("Host object has no name - skipping event",
+			"involvedObjectName", event.InvolvedObject.Name,
+			"involvedObjectNamespace", event.InvolvedObject.Namespace,
+		)
+
+		return reconcile.Result{}, nil
+	}
+
+	// Look up the corresponding object in the virtual cluster.
+	virtPod := &corev1.Pod{}
+	if err := s.VirtualClient.Get(ctx, client.ObjectKey{Name: hostPod.Name, Namespace: hostPod.Namespace}, virtPod); err != nil {
+		if client.IgnoreNotFound(err) != nil {
+			return reconcile.Result{}, fmt.Errorf("could not load virtual object: %w", err)
+		}
+
+		logger.V(1).Info("virtual object not found, skipping event emission",
+			"virtualInvolvedObjectName", hostPod.Name,
+			"virtualInvolvedObjectNamespace", hostPod.Namespace,
+		)
+
+		return reconcile.Result{}, nil
+	}
+
+	logger.V(1).Info("Emitting event into virtual cluster",
+		"virtPodName", virtPod.GetName(), "virtPodNamespace", virtPod.GetNamespace(),
+		"reason", event.Reason, "message", event.Message, "type", event.Type)
 
 	message := translateEventMessage(
 		event.Message,
 		event.InvolvedObject.Name, event.InvolvedObject.Namespace,
-		virtualRef.Name, virtualRef.Namespace,
+		hostPod.Name, hostPod.Namespace,
 	)
 	s.virtEventRecorder.Event(virtPod, event.Type, event.Reason, message)
 
