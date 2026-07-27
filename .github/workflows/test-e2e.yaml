@@ -115,7 +115,12 @@ jobs:
         KUBECONFIG: /etc/rancher/k3s/k3s.yaml
         REPO: ${{ env.REPO }}
         VERSION: ${{ env.VERSION }}
-      run: make E2E_LABEL_FILTER="${{ matrix.label-filter }}" test-e2e
+      run: |
+        if [ "${{ matrix.name }}" = "k3k-upgrade" ]; then
+          make test-upgrade
+        else
+          make E2E_LABEL_FILTER="${{ matrix.label-filter }}" test-e2e
+        fi
 
     - name: Convert coverage data
       run: go tool covdata textfmt -i=${GOCOVERDIR} -o ${GOCOVERDIR}/cover.out
