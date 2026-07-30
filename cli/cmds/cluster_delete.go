@@ -30,7 +30,7 @@ func NewClusterDeleteCmd(appCtx *AppContext) *cobra.Command {
 		Use:     "delete",
 		Short:   "Delete an existing cluster.",
 		Example: "k3kcli cluster delete [command options] NAME",
-		RunE:    delete(appCtx),
+		RunE:    deleteAction(appCtx),
 		Args:    cobra.MaximumNArgs(1),
 	}
 
@@ -44,7 +44,7 @@ func NewClusterDeleteCmd(appCtx *AppContext) *cobra.Command {
 	return cmd
 }
 
-func delete(appCtx *AppContext) func(cmd *cobra.Command, args []string) error {
+func deleteAction(appCtx *AppContext) func(cmd *cobra.Command, args []string) error {
 	return func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		client := appCtx.Client
@@ -73,6 +73,8 @@ func delete(appCtx *AppContext) func(cmd *cobra.Command, args []string) error {
 					return err
 				}
 			}
+
+			removeKubeconfigContexts(appCtx, clusters.Items...)
 
 			return nil
 		}
@@ -104,7 +106,13 @@ func delete(appCtx *AppContext) func(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
-		return deleteCluster(ctx, client, &cluster)
+		if err := deleteCluster(ctx, client, &cluster); err != nil {
+			return err
+		}
+
+		removeKubeconfigContexts(appCtx, cluster)
+
+		return nil
 	}
 }
 

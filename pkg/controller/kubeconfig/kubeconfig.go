@@ -18,6 +18,10 @@ import (
 	"github.com/rancher/k3k/pkg/controller/cluster/server/bootstrap"
 )
 
+// DefaultName is the key used for the cluster, authInfo and context entries of
+// the kubeconfigs created by NewConfig.
+const DefaultName = "default"
+
 type KubeConfig struct {
 	AltNames   certutil.AltNames
 	CN         string
@@ -76,13 +80,13 @@ func NewConfig(url string, serverCA, clientCert, clientKey []byte) *clientcmdapi
 	authInfo.ClientKeyData = clientKey
 
 	context := clientcmdapi.NewContext()
-	context.AuthInfo = "default"
-	context.Cluster = "default"
+	context.AuthInfo = DefaultName
+	context.Cluster = DefaultName
 
-	config.Clusters["default"] = cluster
-	config.AuthInfos["default"] = authInfo
-	config.Contexts["default"] = context
-	config.CurrentContext = "default"
+	config.Clusters[DefaultName] = cluster
+	config.AuthInfos[DefaultName] = authInfo
+	config.Contexts[DefaultName] = context
+	config.CurrentContext = DefaultName
 
 	return config
 }
