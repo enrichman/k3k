@@ -161,6 +161,12 @@ cluster so that pods on external worker nodes can reach the API server, and with
 configuration it can only point them at the host cluster's `ClusterIP`, which external nodes cannot
 route to. For `hcp` clusters with external workers, use `expose.nodePort` or `expose.loadBalancer`.
 
+With more than one server there is a second requirement: each one needs a distinct externally
+routable address, i.e. its own host node, or `kubectl logs` and `exec` return a 502 for the requests
+the servers without one handle. K3k spreads the servers across host nodes by default and reports the
+shortfall through the `HCPEndpointsReady` condition when it cannot.
+See [HCP mode: external workers and TLS routing](hcp-external-workers.md) for the details.
+
 
 ### `clusterCIDR`
 

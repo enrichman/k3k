@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -107,6 +108,94 @@ var _ = When("an external worker joins an HCP cluster", Label(hcpTestsLabel), La
 	})
 })
 
+// A host node can only publish one address, so servers sharing one collapse into a
+// single endpoint and the workers open a single tunnel. k3k cannot make them
+// individually addressable, but it must not stay silent about it: the cluster says so
+// through the HCPEndpointsReady condition.
+//
+// Unlike the spec above this one needs neither a worker nor a multi node host, so it
+// runs everywhere and covers the case reported on a single node host cluster.
+var _ = When("the servers of an HCP cluster share a host node", Label(hcpTestsLabel), Label(slowTestsLabel), func() {
+	var cluster *v1beta1.Cluster
+
+	BeforeEach(func() {
+		namespace := fwk3k.CreateNamespace(k8s)
+
+		DeferCleanup(func() {
+			fwk3k.DeleteNamespaces(k8s, namespace.Name)
+		})
+
+		cluster = NewCluster(namespace.Name)
+		cluster.Spec.Mode = v1beta1.HCPClusterMode
+		cluster.Spec.Servers = new(int32(3))
+		// Pin every server to the same node, which is what a single node host cluster
+		// does on its own. An explicit affinity also opts out of the default spread.
+		cluster.Spec.ServerAffinity = pinToNodeAffinity(aHostNode())
+
+		CreateCluster(cluster)
+	})
+
+	It("reports that the servers cannot be addressed individually", func() {
+		ctx := GinkgoT().Context()
+
+		By("Waiting for the HCPEndpointsReady condition to go False")
+
+		Eventually(func(g Gomega) {
+			var current v1beta1.Cluster
+			g.Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(cluster), &current)).To(Succeed())
+
+			condition := meta.FindStatusCondition(current.Status.Conditions, k3kcluster.ConditionHCPEndpointsReady)
+			g.Expect(condition).To(Not(BeNil()))
+			g.Expect(condition.Status).To(Equal(metav1.ConditionFalse))
+			g.Expect(condition.Reason).To(Equal(k3kcluster.ReasonServersShareHostNode))
+
+			// the cluster itself is fine, only the streaming to external workers is
+			// degraded, so the phase must not follow the condition down
+			g.Expect(current.Status.Phase).To(Equal(v1beta1.ClusterReady))
+		}).
+			WithTimeout(time.Minute * 2).
+			WithPolling(time.Second * 5).
+			Should(Succeed())
+
+		// reaching some of the servers is strictly better than reaching none, so a
+		// degraded cluster still publishes the addresses it does have
+		By("Checking that the addresses we do have are still published")
+
+		virtualCluster := &VirtualCluster{Cluster: cluster}
+		virtualCluster.Client, virtualCluster.RestConfig = NewVirtualK8sClientAndConfig(cluster)
+
+		Expect(kubernetesEndpoints(ctx, virtualCluster)).To(Not(BeEmpty()))
+	})
+})
+
+// aHostNode returns the name of one node of the host cluster.
+func aHostNode() string {
+	GinkgoHelper()
+
+	nodes, err := k8s.CoreV1().Nodes().List(context.Background(), metav1.ListOptions{})
+	Expect(err).To(Not(HaveOccurred()))
+	Expect(nodes.Items).To(Not(BeEmpty()))
+
+	return nodes.Items[0].Name
+}
+
+// pinToNodeAffinity forces the pods it is given to onto a single host node.
+func pinToNodeAffinity(nodeName string) *corev1.Affinity {
+	return &corev1.Affinity{
+		NodeAffinity: &corev1.NodeAffinity{
+			RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+				NodeSelectorTerms: []corev1.NodeSelectorTerm{{
+					MatchExpressions: []corev1.NodeSelectorRequirement{{
+						Key:      corev1.LabelHostname,
+						Operator: corev1.NodeSelectorOpIn,
+						Values:   []string{nodeName},
+					}},
+				}},
+			},
+		},
+	}
+}
+
 // skipWithoutDocker skips the spec when no usable Docker daemon is around, so the
 // suite still runs on hosts that cannot start the worker container.
 func skipWithoutDocker() {
@@ -119,6 +208,16 @@ func skipWithoutDocker() {
 
 // skipWithSingleHostNode skips the spec on a single node host cluster, where all the
 // servers share one node IP and the multi-tunnel path cannot be exercised.
+//
+// This is not a gap in the test setup but an upstream limitation. Addressing servers
+// that share an IP would need a distinct port each, and a k3s agent cannot consume
+// that: an EndpointSlice carries one port for all of its addresses, and the agent's
+// watch replaces its whole address list from the single slice each event carries, so
+// splitting the servers over one slice per port collapses to whichever fired last.
+// One distinct routable IP per server is the only layout that works.
+//
+// The cluster reports the shortfall through the HCPEndpointsReady condition, which
+// "reports when the servers cannot be addressed individually" below covers.
 func skipWithSingleHostNode() {
 	GinkgoHelper()
 

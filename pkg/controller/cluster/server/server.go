@@ -68,6 +68,46 @@ func New(cluster *v1beta1.Cluster, client client.Client, token, image, imagePull
 	}
 }
 
+// defaultServerAffinity spreads the servers of an hcp cluster over distinct host nodes
+// when nothing else has an opinion about where they go.
+//
+// In hcp mode the workers live outside the host cluster and reach the servers through
+// the node IP of the node each server runs on: k3k publishes one of those per server in
+// default/kubernetes, and ExternalTrafficPolicy: Local makes each one land on the server
+// that is local to it. Two servers sharing a node collapse into a single published
+// address, so the worker opens a single remotedialer tunnel and the servers without one
+// cannot serve logs or exec. See https://github.com/rancher/k3k/issues/1002.
+//
+// The rule is preferred rather than required so that a host cluster with fewer nodes than
+// servers stays schedulable; when it cannot be honoured the cluster reports it through the
+// HCPEndpointsReady condition instead.
+func defaultServerAffinity(cluster *v1beta1.Cluster) *corev1.Affinity {
+	if cluster.Spec.Mode != v1beta1.HCPClusterMode {
+		return nil
+	}
+
+	if cluster.Spec.Servers == nil || *cluster.Spec.Servers <= 1 {
+		return nil
+	}
+
+	return &corev1.Affinity{
+		PodAntiAffinity: &corev1.PodAntiAffinity{
+			PreferredDuringSchedulingIgnoredDuringExecution: []corev1.WeightedPodAffinityTerm{{
+				Weight: 100,
+				PodAffinityTerm: corev1.PodAffinityTerm{
+					TopologyKey: corev1.LabelHostname,
+					LabelSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"cluster": cluster.Name,
+							"role":    "server",
+						},
+					},
+				},
+			}},
+		},
+	}
+}
+
 func (s *Server) podSpec(ctx context.Context, image, name string, persistent bool, startupCmd string) corev1.PodSpec {
 	log := ctrl.LoggerFrom(ctx)
 
@@ -76,6 +116,10 @@ func (s *Server) podSpec(ctx context.Context, image, name string, persistent boo
 	if s.cluster.Status.Policy != nil && s.cluster.Status.Policy.ServerAffinity != nil {
 		log.V(1).Info("Using server affinity from policy", "policyName", s.cluster.Status.PolicyName, "clusterName", s.cluster.Name)
 		serverAffinity = s.cluster.Status.Policy.ServerAffinity
+	}
+
+	if serverAffinity == nil {
+		serverAffinity = defaultServerAffinity(s.cluster)
 	}
 
 	podSpec := corev1.PodSpec{

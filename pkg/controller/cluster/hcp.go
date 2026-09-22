@@ -3,10 +3,12 @@ package cluster
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"strconv"
 
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -50,12 +52,13 @@ func findNonLoopbackSAN(sans []string) string {
 // pod CIDR, so kube-proxy DNAT to that endpoint fails. We disable the
 // apiserver reconciler in HCP mode (see serverOptions) and own this
 // EndpointSlice object instead.
-func (c *Reconciler) ensureHCPKubernetesEndpointSlice(ctx context.Context, cluster *v1beta1.Cluster) error {
+func (c *Reconciler) ensureHCPKubernetesEndpointSlice(ctx context.Context, cluster *v1beta1.Cluster, published hcpEndpoints) error {
 	log := ctrl.LoggerFrom(ctx)
 
-	ips, port, err := c.hcpEndpointAddresses(ctx, cluster)
-	if err != nil {
-		return err
+	ips, port := published.ips, published.port
+
+	if len(ips) == 0 {
+		return errors.New("no HCP endpoint addresses to publish")
 	}
 
 	var addressType discoveryv1.AddressType
@@ -114,44 +117,106 @@ func (c *Reconciler) ensureHCPKubernetesEndpointSlice(ctx context.Context, clust
 	return nil
 }
 
-// hcpEndpointAddresses returns the addresses and the port that both the default/kubernetes
-// Endpoints and EndpointSlice publish: one host node IP per server when the cluster is
-// exposed via NodePort, so that every server is individually addressable, otherwise the
-// single externally resolved address.
-//
+// hcpEndpoints is what the default/kubernetes Endpoints and EndpointSlice publish.
 // Both objects have to describe the same thing: a client picking one over the other
 // must not end up with a different set of servers.
-func (c *Reconciler) hcpEndpointAddresses(ctx context.Context, cluster *v1beta1.Cluster) ([]string, int32, error) {
+type hcpEndpoints struct {
+	// ips are the externally reachable addresses of the API server.
+	ips []string
+	// port is the port all of them listen on.
+	port int32
+	// servers is the number of scheduled server pods the ips were meant to address
+	// individually, or 0 when the cluster is exposed through a single front door that
+	// cannot address an individual server at all.
+	servers int
+}
+
+// unreachableServers returns how many servers no external worker can reach
+// individually, because they share a host node with another server and so collapse
+// into a single published address.
+func (e hcpEndpoints) unreachableServers() int {
+	return max(0, e.servers-len(e.ips))
+}
+
+// hcpEndpointAddresses returns the addresses and the port to publish: one host node IP
+// per server when the cluster is exposed via NodePort, so that every server is
+// individually addressable, otherwise the single externally resolved address.
+func (c *Reconciler) hcpEndpointAddresses(ctx context.Context, cluster *v1beta1.Cluster) (hcpEndpoints, error) {
 	url, err := server.URL(ctx, c.Client, cluster, findNonLoopbackSAN(cluster.Spec.TLSSANs))
 	if err != nil {
-		return nil, 0, err
+		return hcpEndpoints{}, err
 	}
 
 	port, err := strconv.Atoi(cmp.Or(url.Port(), "443"))
 	if err != nil {
-		return nil, 0, err
+		return hcpEndpoints{}, err
 	}
 
 	addr, err := hcpEndpointAddress(ctx, url.Hostname())
 	if err != nil {
-		return nil, 0, err
+		return hcpEndpoints{}, err
 	}
 
 	// An Ingress or a LoadBalancer is a single front door that cannot address an
 	// individual server, and the port reported for those is not what the nodes listen
 	// on, so the per-node addressing only applies to NodePort.
 	if cluster.Spec.Expose != nil && cluster.Spec.Expose.NodePort != nil {
-		nodeIPs, err := c.serverNodeIPs(ctx, cluster, isIPv4(addr.IP))
+		nodeIPs, servers, err := c.serverNodeIPs(ctx, cluster, isIPv4(addr.IP))
 		if err != nil {
-			return nil, 0, err
+			return hcpEndpoints{}, err
 		}
 
 		if len(nodeIPs) > 0 {
-			return nodeIPs, int32(port), nil
+			return hcpEndpoints{ips: nodeIPs, port: int32(port), servers: servers}, nil
 		}
 	}
 
-	return []string{addr.IP}, int32(port), nil
+	return hcpEndpoints{ips: []string{addr.IP}, port: int32(port)}, nil
+}
+
+// setHCPEndpointsCondition records whether every server is individually reachable by
+// the external workers.
+//
+// Streaming requests are served by whichever server the client's connection happens to
+// land on, and that server can only reach the worker's kubelet down a remotedialer
+// tunnel the worker opened to it. The worker opens one tunnel per published address, so
+// a server that shares its address with another never gets one and answers kubectl logs
+// and exec with a 502. See https://github.com/rancher/k3k/issues/1002.
+//
+// This is not a failure of the cluster itself, so the phase stays Ready and the
+// addresses we do have are still published: reaching some of the servers is strictly
+// better than reaching none.
+func (c *Reconciler) setHCPEndpointsCondition(cluster *v1beta1.Cluster, published hcpEndpoints) {
+	condition := metav1.Condition{
+		Type:    ConditionHCPEndpointsReady,
+		Status:  metav1.ConditionTrue,
+		Reason:  ReasonEndpointsReconciled,
+		Message: "Every server is individually reachable",
+	}
+
+	if unreachable := published.unreachableServers(); unreachable > 0 {
+		condition.Status = metav1.ConditionFalse
+		condition.Reason = ReasonServersShareHostNode
+		condition.Message = fmt.Sprintf(
+			"%d of %d servers share a host node with another server and cannot be given a distinct address: "+
+				"external workers will get a 502 on kubectl logs and exec for the requests those servers handle. "+
+				"Give the host cluster one node per server, or reduce spec.servers",
+			unreachable, published.servers,
+		)
+	}
+
+	// Only emit an event when the condition flips, so that a standing degradation does
+	// not produce one on every reconcile.
+	if !meta.IsStatusConditionPresentAndEqual(cluster.Status.Conditions, condition.Type, condition.Status) {
+		eventType := corev1.EventTypeNormal
+		if condition.Status != metav1.ConditionTrue {
+			eventType = corev1.EventTypeWarning
+		}
+
+		c.Eventf(cluster, nil, eventType, condition.Reason, ActionReconciling, condition.Message)
+	}
+
+	meta.SetStatusCondition(&cluster.Status.Conditions, condition)
 }
 
 // isIPv4 reports whether the given address is an IPv4 one. A non-IP address is
@@ -163,21 +228,30 @@ func isIPv4(address string) bool {
 }
 
 // serverNodeIPs returns the sorted internal IPs of the host cluster nodes
-// running the server pods of the given cluster, restricted to the IPv4 or IPv6 family.
+// running the server pods of the given cluster, restricted to the IPv4 or IPv6 family,
+// together with the number of scheduled server pods they were derived from.
+//
+// The two counts differ when several servers share a host node: they collapse into a
+// single address, and only one of them ends up individually reachable. The caller
+// reports that through the HCPEndpointsReady condition.
+//
 // Nodes that cannot be fetched are skipped, so a single missing node does not drop the endpoints of all the others.
-func (c *Reconciler) serverNodeIPs(ctx context.Context, cluster *v1beta1.Cluster, wantIPv4 bool) ([]string, error) {
+func (c *Reconciler) serverNodeIPs(ctx context.Context, cluster *v1beta1.Cluster, wantIPv4 bool) ([]string, int, error) {
 	log := ctrl.LoggerFrom(ctx)
 
 	serverPods, err := c.listServerPods(ctx, cluster)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	nodeNames := sets.New[string]()
+	scheduled := 0
 
 	for _, pod := range serverPods {
 		if pod.Spec.NodeName != "" {
 			nodeNames.Insert(pod.Spec.NodeName)
+
+			scheduled++
 		}
 	}
 
@@ -208,7 +282,7 @@ func (c *Reconciler) serverNodeIPs(ctx context.Context, cluster *v1beta1.Cluster
 		}
 	}
 
-	return ips, nil
+	return ips, scheduled, nil
 }
 
 // listServerPods returns the host cluster pods running the servers of the given cluster.
@@ -229,12 +303,13 @@ func (c *Reconciler) listServerPods(ctx context.Context, cluster *v1beta1.Cluste
 	return podList.Items, nil
 }
 
-func (c *Reconciler) ensureHCPKubernetesEndpoints(ctx context.Context, cluster *v1beta1.Cluster) error {
+func (c *Reconciler) ensureHCPKubernetesEndpoints(ctx context.Context, cluster *v1beta1.Cluster, published hcpEndpoints) error {
 	log := ctrl.LoggerFrom(ctx)
 
-	ips, port, err := c.hcpEndpointAddresses(ctx, cluster)
-	if err != nil {
-		return err
+	ips, port := published.ips, published.port
+
+	if len(ips) == 0 {
+		return errors.New("no HCP endpoint addresses to publish")
 	}
 
 	virtClient, err := newVirtualClient(ctx, c.Client, cluster.Name, cluster.Namespace)

@@ -18,6 +18,12 @@ const (
 	// ConditionReady is the condition type reporting whether a cluster is ready.
 	ConditionReady = "Ready"
 
+	// ConditionHCPEndpointsReady is the condition type reporting whether every server
+	// of an hcp cluster is individually reachable by the external workers. It is
+	// orthogonal to ConditionReady: a cluster whose servers share a host node is still
+	// Ready, it just cannot stream logs or exec through all of them.
+	ConditionHCPEndpointsReady = "HCPEndpointsReady"
+
 	// ReasonValidationFailed is set when a cluster fails validation.
 	ReasonValidationFailed = "ValidationFailed"
 	// ReasonProvisioning is set while a cluster is being provisioned.
@@ -28,6 +34,12 @@ const (
 	ReasonProvisioningFailed = "ProvisioningFailed"
 	// ReasonTerminating is set while a cluster is being deleted.
 	ReasonTerminating = "Terminating"
+
+	// ReasonEndpointsReconciled is set when the hcp endpoints address every server.
+	ReasonEndpointsReconciled = "EndpointsReconciled"
+	// ReasonServersShareHostNode is set when several hcp servers run on the same host
+	// node and therefore collapse into a single published address.
+	ReasonServersShareHostNode = "ServersShareHostNode"
 
 	// ActionReconciling is the action reported on cluster events.
 	ActionReconciling = "Reconciling"
