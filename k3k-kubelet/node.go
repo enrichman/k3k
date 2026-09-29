@@ -9,6 +9,7 @@ import (
 
 	"github.com/virtual-kubelet/virtual-kubelet/node/nodeutil"
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/retry"
 
 	"github.com/rancher/k3k/pkg/controller"
@@ -29,7 +30,7 @@ func (k *kubelet) registerNode(agentIP, podIP string, cfg config) error {
 		return fmt.Errorf("unable to get tls config: %w", err)
 	}
 
-	auth, err := webhookAuth(k, clientCA)
+	auth, err := kubeletAuth(k.virtClient, k.name, clientCA)
 	if err != nil {
 		return fmt.Errorf("unable to setup kubelet auth: %w", err)
 	}
@@ -72,16 +73,16 @@ func nodeOpt(handler http.Handler, tlsConfig *tls.Config, port int) nodeutil.Nod
 	}
 }
 
-// webhookAuth authenticates the kubelet API requests with client certificates signed by the
+// kubeletAuth authenticates the kubelet API requests with client certificates signed by the
 // virtual cluster client CA or with bearer tokens (TokenReview), and authorizes them against
 // the virtual cluster API server (SubjectAccessReview), like a real kubelet in webhook mode.
-func webhookAuth(k *kubelet, clientCA []byte) (nodeutil.Auth, error) {
+func kubeletAuth(client kubernetes.Interface, nodeName string, clientCA []byte) (nodeutil.Auth, error) {
 	caProvider, err := dynamiccertificates.NewStaticCAContent("client-ca", clientCA)
 	if err != nil {
 		return nil, err
 	}
 
-	return nodeutil.WebhookAuth(k.virtClient, k.name, func(c *nodeutil.WebhookAuthConfig) error {
+	return nodeutil.WebhookAuth(client, nodeName, func(c *nodeutil.WebhookAuthConfig) error {
 		c.AuthnConfig.ClientCertificateCAContentProvider = caProvider
 		return nil
 	})

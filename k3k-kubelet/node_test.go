@@ -15,6 +15,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
@@ -116,9 +117,15 @@ func newFakeK3sServer(t *testing.T, servingCA, clientCA *testCA) *k3s.Client {
 }
 
 // newFakeVirtClient returns a client for a fake API server authenticating the "valid-token" bearer token
-// as "token-user", and authorizing only the users in allowedUsers to access the nodes resource
-func newFakeVirtClient(t *testing.T, allowedUsers ...string) kubernetes.Interface {
+// as "token-user", and authorizing only the users in allowedUsers to access the nodes resource.
+// The returned function lists the SubjectAccessReviews received by the fake API server.
+func newFakeVirtClient(t *testing.T, allowedUsers ...string) (kubernetes.Interface, func() []authorizationv1.SubjectAccessReview) {
 	t.Helper()
+
+	var (
+		mu      sync.Mutex
+		reviews []authorizationv1.SubjectAccessReview
+	)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/apis/authentication.k8s.io/v1/tokenreviews", func(w http.ResponseWriter, r *http.Request) {
@@ -143,6 +150,12 @@ func newFakeVirtClient(t *testing.T, allowedUsers ...string) kubernetes.Interfac
 			return
 		}
 
+		mu.Lock()
+
+		reviews = append(reviews, review)
+
+		mu.Unlock()
+
 		review.Status.Allowed = slices.Contains(allowedUsers, review.Spec.User) &&
 			review.Spec.ResourceAttributes != nil &&
 			review.Spec.ResourceAttributes.Resource == "nodes"
@@ -157,7 +170,12 @@ func newFakeVirtClient(t *testing.T, allowedUsers ...string) kubernetes.Interfac
 	client, err := kubernetes.NewForConfig(&rest.Config{Host: srv.URL})
 	require.NoError(t, err)
 
-	return client
+	return client, func() []authorizationv1.SubjectAccessReview {
+		mu.Lock()
+		defer mu.Unlock()
+
+		return slices.Clone(reviews)
+	}
 }
 
 func Test_KubeletAPIAuth(t *testing.T) {
@@ -173,12 +191,9 @@ func Test_KubeletAPIAuth(t *testing.T) {
 	tlsConfig, err := loadTLSConfig(k3sClient, caPEM)
 	require.NoError(t, err)
 
-	k := &kubelet{
-		name:       "test-node",
-		virtClient: newFakeVirtClient(t, "system:apiserver", "token-user"),
-	}
+	virtClient, _ := newFakeVirtClient(t, "system:apiserver", "token-user")
 
-	auth, err := webhookAuth(k, caPEM)
+	auth, err := kubeletAuth(virtClient, "test-node", caPEM)
 	require.NoError(t, err)
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -282,6 +297,76 @@ func Test_KubeletAPIAuth(t *testing.T) {
 			}()
 
 			assert.Equal(t, tt.expectStatus, resp.StatusCode)
+		})
+	}
+}
+
+// Test_KubeletAuthHandler checks the auth handler on its own, without the TLS listener: client certificates
+// not signed by the client CA are rejected even if they get past TLS, and requests are authorized as nodes/proxy
+func Test_KubeletAuthHandler(t *testing.T) {
+	clientCA := newTestCA(t, "client-ca")
+	otherCA := newTestCA(t, "other-ca")
+
+	parseCert := func(t *testing.T, ca *testCA, cn string) *x509.Certificate {
+		t.Helper()
+
+		certPEM, _ := ca.issue(t, cn, x509.ExtKeyUsageClientAuth)
+		block, _ := pem.Decode(certPEM)
+
+		cert, err := x509.ParseCertificate(block.Bytes)
+		require.NoError(t, err)
+
+		return cert
+	}
+
+	tests := []struct {
+		name         string
+		cert         *x509.Certificate
+		expectStatus int
+	}{
+		{
+			name:         "certificate from another CA is rejected",
+			cert:         parseCert(t, otherCA, "system:apiserver"),
+			expectStatus: http.StatusUnauthorized,
+		},
+		{
+			name:         "authorized certificate is allowed as nodes/proxy",
+			cert:         parseCert(t, clientCA, "system:apiserver"),
+			expectStatus: http.StatusOK,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			virtClient, reviews := newFakeVirtClient(t, "system:apiserver")
+
+			auth, err := kubeletAuth(virtClient, "test-node", clientCA.pem)
+			require.NoError(t, err)
+
+			handler := nodeutil.WithAuth(auth, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			}))
+
+			req := httptest.NewRequest(http.MethodGet, "/containerLogs/ns/pod/container", nil)
+			req.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{tt.cert}}
+
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+
+			assert.Equal(t, tt.expectStatus, rec.Code)
+
+			if tt.expectStatus == http.StatusUnauthorized {
+				assert.Empty(t, reviews())
+				return
+			}
+
+			require.Len(t, reviews(), 1)
+
+			attrs := reviews()[0].Spec.ResourceAttributes
+			require.NotNil(t, attrs)
+			assert.Equal(t, "nodes", attrs.Resource)
+			assert.Equal(t, "proxy", attrs.Subresource)
+			assert.Equal(t, "test-node", attrs.Name)
 		})
 	}
 }
