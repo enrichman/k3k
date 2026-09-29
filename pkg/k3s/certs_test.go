@@ -56,3 +56,25 @@ func Test_GetServingKubeletCert(t *testing.T) {
 
 	assert.Equal(t, expectedCert, *cert)
 }
+
+func Test_GetClientCA(t *testing.T) {
+	mux := http.NewServeMux()
+
+	mockServer := httptest.NewTLSServer(mux)
+	defer mockServer.Close()
+
+	mux.Handle("/v1-k3s/client-ca.crt", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, err := w.Write([]byte(fakeCertPEM))
+		require.NoError(t, err)
+	}))
+
+	u, err := url.Parse(mockServer.URL)
+	require.NoError(t, err)
+
+	k3sClient := New(ClientConfig{ServerIP: u.Host})
+
+	ca, err := k3sClient.GetClientCA()
+	require.NoError(t, err)
+
+	assert.Equal(t, fakeCertPEM, string(ca))
+}

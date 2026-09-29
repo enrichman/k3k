@@ -21,3 +21,11 @@ func (c *Client) GetServingKubeletCrt() (*tls.Certificate, error) {
 
 	return &tlsCrt, nil
 }
+
+// GetClientCA returns the PEM encoded client CA of the k3s server, used to verify
+// client certificates such as the one the kube-apiserver presents to the kubelet.
+func (c *Client) GetClientCA() ([]byte, error) {
+	endpoint := "/v1-k3s/client-ca.crt"
+
+	return c.do(endpoint, "node", http.MethodGet, nil)
+}
