@@ -185,6 +185,10 @@ func CreateCluster(cluster *v1beta1.Cluster) {
 		WithPolling(time.Second * 10).
 		Should(BeTrue())
 
+	// refresh the cluster to get the status populated by the controller (e.g. the TLS SANs)
+	err = k8sClient.Get(ctx, client.ObjectKeyFromObject(cluster), cluster)
+	Expect(err).To(Not(HaveOccurred()))
+
 	By("Cluster is ready")
 }
 
